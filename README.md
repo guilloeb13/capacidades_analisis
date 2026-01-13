@@ -1,25 +1,91 @@
-# SIEC-C2: Sistema Integrado de Evaluación de Capacidades de Mando y Control
+# SIEC v3.0: Sistema Integrado de Evaluación de Capacidades
 
 ## 🎯 Descripción General
 
-POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de capacidades militares de Mando y Control (C2) basado en el framework **DOTMLPF de la OTAN**.
+POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de **múltiples capacidades militares** basado en el framework **DOTMLPF de la OTAN**.
+
+### **NUEVA VERSIÓN 3.0 - Arquitectura Modular Multicapacidad**
+
+Esta versión implementa:
+- ✅ **Landing Page** de selección de capacidad estratégica
+- ✅ **Navegación dinámica** con st.session_state
+- ✅ **Soporte multicapacidad**: Mando y Control, Maniobra Aérea, Ciberdefensa*, Logística*
+- ✅ **Filtrado inteligente** de datos por capacidad seleccionada
+- ✅ **Clasificadores automáticos** con machine learning (CAPABILITY_KEYWORDS)
+- ✅ **Datos específicos** por capacidad (27 ítems Maniobra + 25 reportes)
+
+*Ciberdefensa y Logística: placeholders para desarrollo futuro
 
 ### Arquitectura Tecnológica
 
 - **Framework de Datos**: Lakehouse Híbrido (Datos Estructurados + NLP No Estructurado)
 - **Stack Tecnológico**: Python 3.8+ | Streamlit | Pandas | Plotly | NumPy
 - **Metodología**: NATO DOTMLPF Framework | Joint Publication 3-0
+- **Versión**: 3.0 (Multi-Capability Architecture)
 - **Clasificación**: NATO UNCLASSIFIED
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## 🚀 Capacidades Estratégicas Implementadas
+
+### 1. 🎯 MANDO Y CONTROL (C2)
+**Status**: ✅ Operacional
+
+Análisis de capacidades de Command, Control, Communications, Computers & Intelligence (C4I):
+- 20 partidas específicas: Software C2, Radios HF, Bunkers, Ciberdefensa
+- 25 reportes operativos específicos
+- Niveles operacionales: Estratégico, Operacional, Táctico, Guerra Electrónica
+- Unidades: 5 comandos especializados
+
+### 2. ✈️ MANIOBRA AÉREA
+**Status**: ✅ Operacional (NUEVO en v3.0)
+
+Análisis de operaciones de combate aéreo y proyección de poder:
+- **Personal (P)**: Sueldos Pilotos, Bonificación Vuelo, Tripulación Aerotécnica
+- **Training (T)**: Horas de Vuelo, Simulador Full Mission, Combate Aéreo Avanzado, Tiro Real
+- **Material (M)**: Repuestos Super Tucano, PDM, Munición Aérea, Rotables, Overhaul Motor
+- **Operaciones (O)**: Combustible JP1, Seguro Casco Aéreo
+- **Facilities (F)**: Mantenimiento Pista, Hangar Alerta, Torre Control
+- 27 partidas específicas + 25 reportes operativos
+- Niveles: Combate Aéreo, Apoyo Cercano, Interdicción, Reconocimiento
+- Unidades: 6 alas de combate y escuadrones
+
+### 3. 🛡️ CIBERDEFENSA
+**Status**: 🚧 Placeholder (Próximamente)
+
+Operaciones cibernéticas defensivas y ofensivas.
+
+### 4. 📦 LOGÍSTICA
+**Status**: 🚧 Placeholder (Próximamente)
+
+Sostenimiento y cadena de suministro militar.
+
+---
+
+## 🏗️ Arquitectura del Sistema v3.0
+
+### Flujo de Navegación
+
+```
+1. Landing Page → Selección de Capacidad
+                  ├─ [🎯 MANDO Y CONTROL] → Dashboard C2
+                  ├─ [✈️ MANIOBRA AÉREA]  → Dashboard Maniobra
+                  ├─ [🛡️ CIBERDEFENSA]     → (En desarrollo)
+                  └─ [📦 LOGÍSTICA]        → (En desarrollo)
+
+2. Dashboard → 3 TABS + Sidebar
+   ├─ TAB 1: Situational Awareness (Heatmap + Radar)
+   ├─ TAB 2: Gobernanza & Calidad del Gasto
+   ├─ TAB 3: Data Intelligence (NLP)
+   └─ Sidebar: [⬅️ VOLVER AL INICIO] + Métricas + Filtros
+```
 
 ### Módulos Principales
 
 1. **Generación de Datos Estructurados (SQL Simulado)**
-   - 150 registros presupuestarios del sistema eSIGEF
-   - Partidas específicas de C2: Software, Hardware, Infraestructura, Capacitación
+   - 80 registros presupuestarios por capacidad
+   - Datos específicos C2: Software, Radios, Bunkers, Servidores
+   - Datos específicos Maniobra: Pilotos, Horas Vuelo, Repuestos, PDM, Hangares
    - Códigos presupuestarios clasificados por DOTMLPF
 
 2. **Generación de Datos No Estructurados (NLP Simulado)**
@@ -253,6 +319,7 @@ Para consultas sobre el sistema SIEC-C2, contactar al equipo de Defense Analytic
 
 ---
 
-**Última actualización**: 2024-12-30
-**Versión**: 2.5
-**Status**: POC Funcional
+**Última actualización**: 2026-01-13
+**Versión**: 3.0 (Multi-Capability Architecture)
+**Status**: POC Funcional Multicapacidad
+**Nuevas Capacidades**: Maniobra Aérea ✈️ | Navegación Modular 🎯 | Landing Page 🚀
