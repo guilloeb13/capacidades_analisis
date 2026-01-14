@@ -1,12 +1,20 @@
 """
-SIEC v3.0: Sistema Integrado de Evaluación de Capacidades
+SIEC v4.0: Sistema Integrado de Evaluación de Capacidades
 ==========================================================
-Arquitectura Modular Multicapacidad - POC Funcional End-to-End
+Arquitectura Modular Multicapacidad + Scoring Ponderado Estratégico
 
 Autor: Lead Data Scientist - OTAN Defense Analytics
-Arquitectura: Lakehouse Híbrido + Navegación Multicapacidad
+Arquitectura: Lakehouse Híbrido + Weighted Scoring Algorithm
 Framework: Streamlit + Pandas + Plotly
-Versión: 3.0 (Multi-Capability)
+Versión: 4.0 (Weighted Strategic Scoring + Real OOB)
+
+CHANGELOG v4.0:
+- Orden de Batalla real FAE (15 unidades)
+- Sistema de pesos DOTMLPF estratégicos configurables
+- Algoritmo de scoring ponderado
+- Controles de ajuste en sidebar
+- Validación de pesos (suma 100%)
+- Visualizaciones con valores ponderados
 """
 
 import streamlit as st
@@ -21,6 +29,37 @@ from typing import Tuple, Dict, List
 # ============================================================================
 # CONFIGURACIÓN GLOBAL Y CONSTANTES MILITARES
 # ============================================================================
+
+# ORDEN DE BATALLA REAL - FUERZA AÉREA ECUATORIANA (FAE)
+MILITARY_UNITS = [
+    "Ala de Combate Nro. 11",
+    "Ala de Combate Nro. 21",
+    "Ala de Combate Nro. 22",
+    "Ala de Combate Nro. 23",
+    "Ala de Transporte Nro. 11",
+    "Grupo Aéreo Amazonas",
+    "Grupo Aéreo Insular",
+    "Escuela Superior Militar de Aviación (ESMA)",
+    "Centro de Operaciones Aéreas (COA)",
+    "Centro de Operaciones Sectorial 1 (COS-1)",
+    "Centro de Operaciones Sectorial 2 (COS-2)",
+    "Comando de Ciberdefensa (COCIBER)",
+    "Dirección de Inteligencia Aérea",
+    "Centro de Operaciones Espaciales (SpOC)",
+    "Dirección de Planificación (DIRPLAN)"
+]
+
+# PESOS ESTRATÉGICOS DOTMLPF (Planificación Estratégica FAE)
+# Basados en doctrina y prioridades institucionales
+DEFAULT_DOTMLPF_WEIGHTS = {
+    'M': 0.200,  # Material - 20.0%
+    'F': 0.138,  # Facilities - 13.8%
+    'P': 0.166,  # Personnel - 16.6%
+    'T': 0.194,  # Training - 19.4%
+    'D': 0.151,  # Doctrine - 15.1%
+    'O': 0.151,  # Organization - 15.1%
+    'L': 0.000   # Leadership - Distribuido en otros
+}
 
 # Capacidades Estratégicas del Sistema
 STRATEGIC_CAPABILITIES = {
@@ -128,34 +167,13 @@ POSITIVE_KEYWORDS = [
     'misión cumplida', 'ready', 'apto para vuelo', 'certificado'
 ]
 
-# Unidades Militares
-MILITARY_UNITS = {
-    'C2': [
-        'Comando Aéreo de Combate',
-        'Centro de Operaciones Conjuntas',
-        'Grupo de Guerra Electrónica',
-        'Escuadrón de Defensa Aérea',
-        'Comando de Ciberdefensa'
-    ],
-    'MANIOBRA': [
-        'Ala de Combate 21 (Taura)',
-        'Ala de Combate 22 (Guayaquil)',
-        'Ala de Combate 23 (Manta)',
-        'Escuadrón de Combate 2111',
-        'Escuadrón de Combate 2112',
-        'Escuadrón Logístico 21'
-    ],
-    'CIBERDEFENSA': ['Comando de Ciberdefensa'],
-    'LOGISTICA': ['Comando Logístico']
-}
-
 # ============================================================================
 # MÓDULO 1: GENERACIÓN DE DATOS ESTRUCTURADOS (SQL SIMULADO)
 # ============================================================================
 
 def generate_structured_data(capability: str = None) -> pd.DataFrame:
     """
-    Simula la ingesta desde eSIGEF (Sistema Financiero Gubernamental).
+    Simula la ingesta desde eSIGEF con Orden de Batalla real FAE.
     Genera partidas presupuestarias específicas por capacidad.
 
     Args:
@@ -168,9 +186,7 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
     np.random.seed(42)
     random.seed(42)
 
-    # ========================================================================
-    # PARTIDAS ESPECÍFICAS DE MANDO Y CONTROL (C2)
-    # ========================================================================
+    # Partidas C2
     c2_items = [
         ('Licencias Software C2', '530801', 'T', 'C2'),
         ('Radios HF Tácticas', '840101', 'M', 'C2'),
@@ -194,17 +210,12 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         ('Análisis Vulnerabilidades', '580102', 'D', 'C2')
     ]
 
-    # ========================================================================
-    # PARTIDAS ESPECÍFICAS DE MANIOBRA AÉREA
-    # ========================================================================
+    # Partidas Maniobra
     maniobra_items = [
-        # Personal (P)
         ('Sueldos Pilotos Combate', '510201', 'P', 'MANIOBRA'),
         ('Bonificación Vuelo', '510202', 'P', 'MANIOBRA'),
         ('Tripulación Aerotécnica', '510203', 'P', 'MANIOBRA'),
         ('Personal Mantenimiento Aeronáutico', '510204', 'P', 'MANIOBRA'),
-
-        # Training (T)
         ('Horas de Vuelo Entrenamiento', '530510', 'T', 'MANIOBRA'),
         ('Simulador Full Mission', '530511', 'T', 'MANIOBRA'),
         ('Curso Combate Aéreo Avanzado', '530512', 'T', 'MANIOBRA'),
@@ -212,8 +223,6 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         ('Certificación Pilotos Instructores', '530514', 'T', 'MANIOBRA'),
         ('Curso Vuelo Instrumental IFR', '530515', 'T', 'MANIOBRA'),
         ('Entrenamiento Combate Aire-Tierra', '530516', 'T', 'MANIOBRA'),
-
-        # Material (M)
         ('Repuestos Flota Super Tucano', '710401', 'M', 'MANIOBRA'),
         ('Mantenimiento PDM Aeronaves', '710402', 'M', 'MANIOBRA'),
         ('Adquisición Munición Aérea', '840201', 'M', 'MANIOBRA'),
@@ -222,27 +231,19 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         ('Sistema Aviónica Modernizado', '840203', 'M', 'MANIOBRA'),
         ('Asientos Eyectables Martin Baker', '840204', 'M', 'MANIOBRA'),
         ('Tren de Aterrizaje Principal', '710404', 'M', 'MANIOBRA'),
-
-        # Operaciones (O)
         ('Combustible Aviación JP1', '530310', 'O', 'MANIOBRA'),
         ('Seguro Casco Aéreo', '530910', 'O', 'MANIOBRA'),
         ('Servicios Meteorológicos', '530311', 'O', 'MANIOBRA'),
-
-        # Infraestructura (F)
         ('Mantenimiento Pista Principal', '750201', 'F', 'MANIOBRA'),
         ('Construcción Hangar Alerta', '750202', 'F', 'MANIOBRA'),
         ('Modernización Torre Control', '750203', 'F', 'MANIOBRA'),
         ('Sistema Iluminación Pista', '750204', 'F', 'MANIOBRA')
     ]
 
-    # ========================================================================
-    # CONSOLIDACIÓN Y GENERACIÓN DE REGISTROS
-    # ========================================================================
-
     records = []
     start_date = datetime(2024, 1, 1)
 
-    # Determinar qué items usar según la capacidad
+    # Determinar items según capacidad
     if capability == 'C2':
         capability_items = c2_items
         num_records = 70
@@ -250,23 +251,20 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         capability_items = maniobra_items
         num_records = 70
     elif capability is None:
-        # Todas las capacidades
         capability_items = c2_items + maniobra_items
         num_records = 140
     else:
-        # Placeholder para otras capacidades
         capability_items = []
         num_records = 0
 
-    # Generar registros específicos de capacidad
+    # Generar registros
     for i in range(num_records):
         if not capability_items:
             break
 
         item = random.choice(capability_items)
         item_capability = item[3]
-        units_list = MILITARY_UNITS.get(item_capability, MILITARY_UNITS['C2'])
-        unit = random.choice(units_list)
+        unit = random.choice(MILITARY_UNITS)  # ORDEN DE BATALLA REAL
 
         monto_asignado = np.random.randint(50000, 500000)
         ejecucion_pct = np.random.beta(7, 3)
@@ -287,7 +285,7 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
             'Capacidad': item_capability
         })
 
-    # Generar partidas genéricas (10 registros adicionales)
+    # Partidas genéricas
     generic_items = [
         ('Servicios Básicos', '530101', 'O'),
         ('Material Oficina', '530102', 'O'),
@@ -304,8 +302,7 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
     for i in range(10):
         item = random.choice(generic_items)
         cap = capability if capability else random.choice(['C2', 'MANIOBRA'])
-        units_list = MILITARY_UNITS.get(cap, MILITARY_UNITS['C2'])
-        unit = random.choice(units_list)
+        unit = random.choice(MILITARY_UNITS)
 
         monto_asignado = np.random.randint(10000, 100000)
         ejecucion_pct = np.random.beta(5, 3)
@@ -336,11 +333,10 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
 
 def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
     """
-    Simula reportes operativos de texto libre extraídos de PDFs.
-    Representa el componente no estructurado del Lakehouse.
+    Simula reportes operativos de texto libre con unidades FAE reales.
 
     Args:
-        capability: 'C2', 'MANIOBRA', etc., o None (todas)
+        capability: Capacidad a filtrar
 
     Returns:
         DataFrame con reportes de novedades operativas
@@ -348,9 +344,6 @@ def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
 
     random.seed(42)
 
-    # ========================================================================
-    # REPORTES DE MANDO Y CONTROL (C2)
-    # ========================================================================
     c2_reports = [
         "Falla crítica en servidor principal por sobrecalentamiento. Requiere intervención inmediata.",
         "Personal de radar sin curso de actualización vigente desde hace 8 meses.",
@@ -379,9 +372,6 @@ def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
         "Radar de vigilancia aérea presentando ecos fantasma en sector norte."
     ]
 
-    # ========================================================================
-    # REPORTES DE MANIOBRA AÉREA
-    # ========================================================================
     maniobra_reports = [
         "Flota Super Tucano operando al 85% de disponibilidad. Dos aeronaves en PDM programado.",
         "Piloto experimentado completó 1000 horas de vuelo en combate. Certificación excelente.",
@@ -410,7 +400,7 @@ def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
         "Servicios meteorológicos operando óptimamente. Pronósticos precisos para planificación."
     ]
 
-    # Seleccionar reportes según capacidad
+    # Seleccionar reportes
     if capability == 'C2':
         selected_reports = c2_reports
     elif capability == 'MANIOBRA':
@@ -420,16 +410,12 @@ def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
     else:
         selected_reports = []
 
-    # Limitar a 50 reportes
     selected_reports = selected_reports[:50]
 
     records = []
     for i, report_text in enumerate(selected_reports):
-        # Determinar capacidad del reporte
         report_capability = classify_capability(report_text)
-
-        units_list = MILITARY_UNITS.get(report_capability, MILITARY_UNITS['C2'])
-        unit = random.choice(units_list)
+        unit = random.choice(MILITARY_UNITS)  # ORDEN DE BATALLA REAL
         fecha = datetime(2024, 1, 1) + timedelta(days=random.randint(0, 330))
 
         records.append({
@@ -449,46 +435,23 @@ def generate_unstructured_data(capability: str = None) -> pd.DataFrame:
 # ============================================================================
 
 def classify_capability(description: str) -> str:
-    """
-    Clasifica una partida o reporte en su capacidad estratégica.
-
-    Args:
-        description: Texto a clasificar
-
-    Returns:
-        Capacidad ('C2', 'MANIOBRA', etc.)
-    """
-
+    """Clasifica texto en capacidad estratégica."""
     desc_lower = description.lower()
-
-    # Scoring por keywords
     scores = {}
+
     for cap, keywords in CAPABILITY_KEYWORDS.items():
         score = sum(1 for keyword in keywords if keyword in desc_lower)
         scores[cap] = score
 
-    # Retornar la capacidad con mayor score
     if max(scores.values()) > 0:
         return max(scores, key=scores.get)
 
-    return 'C2'  # Default
+    return 'C2'
 
 
 def classify_operational_level(description: str, capability: str) -> str:
-    """
-    Clasifica en nivel operacional según capacidad.
-
-    Args:
-        description: Texto a clasificar
-        capability: Capacidad estratégica
-
-    Returns:
-        Nivel operacional
-    """
-
+    """Clasifica en nivel operacional según capacidad."""
     levels = OPERATIONAL_LEVELS.get(capability, OPERATIONAL_LEVELS['C2'])
-
-    # Análisis simple por keywords
     desc_lower = description.lower()
 
     if capability == 'C2':
@@ -511,43 +474,31 @@ def classify_operational_level(description: str, capability: str) -> str:
         elif any(word in desc_lower for word in ['reconocimiento', 'isr']):
             return levels[3]
 
-    return levels[0]  # Default
+    return levels[0]
 
 
 # ============================================================================
-# MÓDULO 4: MOTOR NLP - ANÁLISIS DE SENTIMIENTO Y RIESGO
+# MÓDULO 4: MOTOR NLP
 # ============================================================================
 
 def analyze_sentiment_readiness(text: str) -> Dict[str, any]:
-    """
-    Motor NLP simplificado para analizar riesgo operacional.
-
-    Args:
-        text: Texto del reporte operativo
-
-    Returns:
-        Dict con risk_score, sentiment, y keywords detectadas
-    """
-
+    """Motor NLP para análisis de riesgo operacional."""
     text_lower = text.lower()
     risk_score = 0
     detected_issues = []
     sentiment = 'neutral'
 
-    # Análisis de keywords negativas
     for keyword, score in RISK_KEYWORDS.items():
         if keyword in text_lower:
             risk_score = max(risk_score, score)
             detected_issues.append(keyword)
 
-    # Análisis de keywords positivas
     for pos_keyword in POSITIVE_KEYWORDS:
         if pos_keyword in text_lower:
             risk_score = max(0, risk_score - 30)
             sentiment = 'positive'
             break
 
-    # Clasificación final
     if risk_score >= 70:
         sentiment = 'critical'
     elif risk_score >= 50:
@@ -570,17 +521,7 @@ def analyze_sentiment_readiness(text: str) -> Dict[str, any]:
 # ============================================================================
 
 def map_dotmlpf(codigo: str, descripcion: str) -> str:
-    """
-    Mapea código presupuestario y descripción a componente DOTMLPF.
-
-    Args:
-        codigo: Código presupuestario
-        descripcion: Descripción de la partida
-
-    Returns:
-        Letra DOTMLPF
-    """
-
+    """Mapea código presupuestario a componente DOTMLPF."""
     codigo_base = codigo[:2]
     if codigo_base in BUDGET_CODE_MAPPING:
         return BUDGET_CODE_MAPPING[codigo_base]
@@ -605,22 +546,50 @@ def map_dotmlpf(codigo: str, descripcion: str) -> str:
 
 
 # ============================================================================
-# MÓDULO 6: CÁLCULO DE MÉTRICAS Y CALIDAD DEL GASTO
+# MÓDULO 6: CÁLCULO DE MÉTRICAS CON SCORING PONDERADO (v4.0)
 # ============================================================================
 
-def calculate_quality_metrics(df_budget: pd.DataFrame, df_reports: pd.DataFrame) -> pd.DataFrame:
+def calculate_weighted_dotmlpf_scores(df_budget: pd.DataFrame, weights: Dict[str, float]) -> pd.DataFrame:
     """
-    Calcula KPIs de eficiencia presupuestaria y alistamiento operativo.
+    Calcula scores DOTMLPF ponderados por unidad.
+
+    Args:
+        df_budget: DataFrame de presupuesto
+        weights: Diccionario de pesos DOTMLPF
+
+    Returns:
+        DataFrame con scores por componente
+    """
+
+    # Agrupar por unidad y componente DOTMLPF
+    dotmlpf_by_unit = df_budget.groupby(['Unidad_Beneficiaria', 'DOTMLPF_Tag']).agg({
+        'Monto_Asignado': 'sum',
+        'Monto_Ejecutado': 'sum'
+    }).reset_index()
+
+    # Calcular % ejecución por componente
+    dotmlpf_by_unit['Ejecucion_Componente'] = (
+        dotmlpf_by_unit['Monto_Ejecutado'] / dotmlpf_by_unit['Monto_Asignado'] * 100
+    ).fillna(0).round(2)
+
+    return dotmlpf_by_unit
+
+
+def calculate_quality_metrics(df_budget: pd.DataFrame, df_reports: pd.DataFrame,
+                              weights: Dict[str, float]) -> pd.DataFrame:
+    """
+    Calcula KPIs con scoring ponderado estratégico (v4.0).
 
     Args:
         df_budget: DataFrame de presupuesto
         df_reports: DataFrame de reportes con análisis NLP
+        weights: Pesos DOTMLPF estratégicos
 
     Returns:
         DataFrame con métricas agregadas por unidad
     """
 
-    # KPI 1: Ejecución Presupuestaria
+    # KPI 1: Ejecución Presupuestaria Global
     budget_metrics = df_budget.groupby('Unidad_Beneficiaria').agg({
         'Monto_Asignado': 'sum',
         'Monto_Ejecutado': 'sum'
@@ -630,25 +599,63 @@ def calculate_quality_metrics(df_budget: pd.DataFrame, df_reports: pd.DataFrame)
         budget_metrics['Monto_Ejecutado'] / budget_metrics['Monto_Asignado'] * 100
     ).round(2)
 
-    # KPI 2: Alistamiento Operativo
+    # KPI 2: Scoring DOTMLPF Ponderado
+    dotmlpf_scores = calculate_weighted_dotmlpf_scores(df_budget, weights)
+
+    # Calcular score ponderado por unidad
+    weighted_scores = []
+    for unit in budget_metrics['Unidad_Beneficiaria'].unique():
+        unit_data = dotmlpf_scores[dotmlpf_scores['Unidad_Beneficiaria'] == unit]
+
+        # Calcular score ponderado
+        total_weighted_score = 0
+        for component in DOTMLPF_TAXONOMY.keys():
+            comp_data = unit_data[unit_data['DOTMLPF_Tag'] == component]
+            if len(comp_data) > 0:
+                comp_score = comp_data['Ejecucion_Componente'].values[0]
+            else:
+                comp_score = 0
+
+            weight = weights.get(component, 0)
+            total_weighted_score += comp_score * weight
+
+        weighted_scores.append({
+            'Unidad_Beneficiaria': unit,
+            'Alistamiento_Ponderado': round(total_weighted_score, 2)
+        })
+
+    weighted_df = pd.DataFrame(weighted_scores)
+
+    # KPI 3: Alistamiento desde reportes NLP
     readiness_metrics = df_reports.groupby('Unidad').agg({
         'readiness_index': 'mean',
         'risk_score': 'mean'
     }).reset_index()
 
     readiness_metrics.rename(columns={'Unidad': 'Unidad_Beneficiaria'}, inplace=True)
-    readiness_metrics['Alistamiento_Pct'] = readiness_metrics['readiness_index'].round(2)
+    readiness_metrics['Alistamiento_NLP'] = readiness_metrics['readiness_index'].round(2)
 
-    # Merge
-    metrics = budget_metrics.merge(
-        readiness_metrics[['Unidad_Beneficiaria', 'Alistamiento_Pct', 'risk_score']],
+    # Merge de todas las métricas
+    metrics = budget_metrics.merge(weighted_df, on='Unidad_Beneficiaria', how='left')
+    metrics = metrics.merge(
+        readiness_metrics[['Unidad_Beneficiaria', 'Alistamiento_NLP', 'risk_score']],
         on='Unidad_Beneficiaria',
         how='left'
     )
 
     # Rellenar NaN
-    metrics['Alistamiento_Pct'] = metrics['Alistamiento_Pct'].fillna(metrics['Alistamiento_Pct'].mean())
+    metrics['Alistamiento_Ponderado'] = metrics['Alistamiento_Ponderado'].fillna(
+        metrics['Alistamiento_Ponderado'].mean()
+    )
+    metrics['Alistamiento_NLP'] = metrics['Alistamiento_NLP'].fillna(
+        metrics['Alistamiento_NLP'].mean()
+    )
     metrics['risk_score'] = metrics['risk_score'].fillna(metrics['risk_score'].mean())
+
+    # Alistamiento combinado (70% ponderado + 30% NLP)
+    metrics['Alistamiento_Pct'] = (
+        metrics['Alistamiento_Ponderado'] * 0.7 + metrics['Alistamiento_NLP'] * 0.3
+    ).round(2)
 
     # Clasificación en cuadrantes
     def classify_quadrant(row):
@@ -669,21 +676,29 @@ def calculate_quality_metrics(df_budget: pd.DataFrame, df_reports: pd.DataFrame)
     return metrics
 
 
-def create_dotmlpf_matrix(df_budget: pd.DataFrame) -> pd.DataFrame:
+def create_dotmlpf_matrix(df_budget: pd.DataFrame, weights: Dict[str, float]) -> pd.DataFrame:
     """
-    Crea matriz cruzada Nivel Operacional x DOTMLPF.
+    Crea matriz DOTMLPF con valores ponderados.
 
     Args:
-        df_budget: DataFrame de presupuesto con clasificaciones
+        df_budget: DataFrame de presupuesto
+        weights: Pesos estratégicos
 
     Returns:
-        DataFrame pivote para heatmap
+        DataFrame pivote con valores ponderados
     """
 
-    matrix = df_budget.pivot_table(
+    # Calcular monto ponderado
+    df_budget_weighted = df_budget.copy()
+    df_budget_weighted['Monto_Ponderado'] = df_budget_weighted.apply(
+        lambda row: row['Monto_Ejecutado'] * weights.get(row['DOTMLPF_Tag'], 0),
+        axis=1
+    )
+
+    matrix = df_budget_weighted.pivot_table(
         index='Operational_Level',
         columns='DOTMLPF_Tag',
-        values='Monto_Ejecutado',
+        values='Monto_Ponderado',
         aggfunc='sum',
         fill_value=0
     )
@@ -704,69 +719,80 @@ def create_dotmlpf_matrix(df_budget: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data
 def load_and_process_data(capability: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Pipeline principal: Genera, procesa y enriquece datos por capacidad.
+    """Pipeline principal con orden de batalla real FAE."""
 
-    Args:
-        capability: Capacidad estratégica a procesar
-
-    Returns:
-        Tupla (df_budget_enriched, df_reports_analyzed, df_metrics)
-    """
-
-    # STAGE 1: Generación
     df_budget = generate_structured_data(capability)
     df_reports = generate_unstructured_data(capability)
 
-    # STAGE 2: Clasificación
     df_budget['Operational_Level'] = df_budget.apply(
         lambda row: classify_operational_level(row['Descripcion'], row['Capacidad']),
         axis=1
     )
 
-    # STAGE 3: Análisis NLP
     nlp_results = df_reports['Texto_Reporte'].apply(analyze_sentiment_readiness)
     df_reports['risk_score'] = nlp_results.apply(lambda x: x['risk_score'])
     df_reports['sentiment'] = nlp_results.apply(lambda x: x['sentiment'])
     df_reports['issues_detected'] = nlp_results.apply(lambda x: x['issues_detected'])
     df_reports['readiness_index'] = nlp_results.apply(lambda x: x['readiness_index'])
 
-    # STAGE 4: Métricas
-    df_metrics = calculate_quality_metrics(df_budget, df_reports)
-
-    return df_budget, df_reports, df_metrics
+    return df_budget, df_reports
 
 
 # ============================================================================
-# MÓDULO 8: VISUALIZACIONES
+# MÓDULO 8: VISUALIZACIONES CON VALORES PONDERADOS (v4.0)
 # ============================================================================
 
-def render_dotmlpf_heatmap(df_budget: pd.DataFrame):
-    """Matriz de Calor DOTMLPF."""
+def render_dotmlpf_heatmap(df_budget: pd.DataFrame, weights: Dict[str, float]):
+    """Heatmap con valores ponderados estratégicos."""
 
-    matrix = create_dotmlpf_matrix(df_budget)
+    matrix = create_dotmlpf_matrix(df_budget, weights)
+
+    # Crear anotaciones
+    annotations = []
+    for i, row_label in enumerate(matrix.index):
+        for j, col_label in enumerate(matrix.columns):
+            value = matrix.iloc[i, j]
+            weight = weights.get(col_label, 0)
+
+            if value > 0:
+                text = f'${value/1000:.0f}K<br>W:{weight*100:.1f}%'
+                color = 'white'
+            else:
+                text = 'GAP'
+                color = 'red'
+
+            annotations.append(
+                dict(
+                    x=f"{col_label} - {DOTMLPF_TAXONOMY[col_label]}",
+                    y=row_label,
+                    text=text,
+                    showarrow=False,
+                    font=dict(color=color, size=9)
+                )
+            )
 
     fig = go.Figure(data=go.Heatmap(
         z=matrix.values,
         x=[f"{k} - {v}" for k, v in DOTMLPF_TAXONOMY.items()],
         y=matrix.index,
         colorscale='Viridis',
-        colorbar=dict(title="USD", tickprefix="$", tickformat=",.0f")
+        colorbar=dict(title="USD Ponderado", tickprefix="$", tickformat=",.0f")
     ))
 
     fig.update_layout(
-        title='MATRIZ DOTMLPF x NIVEL OPERACIONAL<br><sub>Inversión Ejecutada (USD)</sub>',
-        xaxis_title="Componentes DOTMLPF",
+        title='MATRIZ DOTMLPF PONDERADA<br><sub>Inversión Ponderada por Pesos Estratégicos (USD)</sub>',
+        xaxis_title="Componentes DOTMLPF (con pesos aplicados)",
         yaxis_title="Niveles Operacionales",
         template='plotly_dark',
-        height=500
+        height=500,
+        annotations=annotations
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_radar_chart(df_budget: pd.DataFrame):
-    """Radar Chart de balance DOTMLPF."""
+def render_radar_chart(df_budget: pd.DataFrame, weights: Dict[str, float]):
+    """Radar Chart con líneas de referencia de pesos."""
 
     dotmlpf_totals = df_budget.groupby('DOTMLPF_Tag')['Monto_Ejecutado'].sum()
     dotmlpf_normalized = (dotmlpf_totals / dotmlpf_totals.max() * 100).round(2)
@@ -774,28 +800,47 @@ def render_radar_chart(df_budget: pd.DataFrame):
     categories = [f"{k} - {DOTMLPF_TAXONOMY[k]}" for k in DOTMLPF_TAXONOMY.keys()]
     values = [dotmlpf_normalized.get(k, 0) for k in DOTMLPF_TAXONOMY.keys()]
 
+    # Valores de pesos estratégicos (normalizados a 100)
+    weight_values = [weights.get(k, 0) * 100 for k in DOTMLPF_TAXONOMY.keys()]
+
     fig = go.Figure()
 
+    # Inversión real
     fig.add_trace(go.Scatterpolar(
         r=values,
         theta=categories,
         fill='toself',
-        name='Inversión Actual',
-        line=dict(color='cyan', width=2)
+        name='Inversión Real',
+        line=dict(color='cyan', width=2),
+        fillcolor='rgba(0,255,255,0.3)'
+    ))
+
+    # Pesos estratégicos (referencia)
+    fig.add_trace(go.Scatterpolar(
+        r=weight_values,
+        theta=categories,
+        fill='toself',
+        name='Pesos Estratégicos',
+        line=dict(color='yellow', width=2, dash='dash'),
+        fillcolor='rgba(255,255,0,0.1)'
     ))
 
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-        title='BALANCE DOTMLPF<br><sub>Equilibrio de Capacidades</sub>',
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], ticksuffix='%'),
+            bgcolor='rgba(20,20,20,0.5)'
+        ),
+        title='BALANCE DOTMLPF CON PESOS ESTRATÉGICOS<br><sub>Inversión Real vs Pesos Planificados</sub>',
         template='plotly_dark',
-        height=500
+        height=500,
+        showlegend=True
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
 
 def render_efficiency_matrix(df_metrics: pd.DataFrame):
-    """Scatter Plot de Calidad del Gasto."""
+    """Scatter Plot de Calidad del Gasto con scoring ponderado."""
 
     color_map = {
         'Eficiente': 'green',
@@ -811,6 +856,13 @@ def render_efficiency_matrix(df_metrics: pd.DataFrame):
         size='Monto_Ejecutado',
         color='Cuadrante',
         hover_name='Unidad_Beneficiaria',
+        hover_data={
+            'Monto_Ejecutado': ':$,.0f',
+            'Ejecucion_Pct': ':.1f%',
+            'Alistamiento_Pct': ':.1f% (Ponderado)',
+            'Alistamiento_Ponderado': ':.1f%',
+            'Alistamiento_NLP': ':.1f%'
+        },
         color_discrete_map=color_map,
         template='plotly_dark'
     )
@@ -821,7 +873,7 @@ def render_efficiency_matrix(df_metrics: pd.DataFrame):
     fig.add_vline(x=50, line_dash="dash", line_color="orange", opacity=0.5)
 
     fig.update_layout(
-        title='MATRIZ DE CALIDAD DEL GASTO',
+        title='MATRIZ DE CALIDAD DEL GASTO (Scoring Ponderado v4.0)',
         height=600
     )
 
@@ -829,25 +881,23 @@ def render_efficiency_matrix(df_metrics: pd.DataFrame):
 
 
 # ============================================================================
-# MÓDULO 9: LANDING PAGE (SELECTOR DE CAPACIDADES)
+# MÓDULO 9: LANDING PAGE
 # ============================================================================
 
 def render_landing_page():
-    """
-    Pantalla inicial de selección de capacidad estratégica.
-    """
+    """Pantalla inicial de selección de capacidad estratégica."""
 
     st.markdown("""
         <div style='text-align: center; padding: 40px; background: linear-gradient(135deg, #000428 0%, #004e92 100%); border-radius: 15px; margin-bottom: 40px;'>
-            <h1 style='margin: 0; font-size: 56px; color: #00D9FF;'>⚔️ SIEC v3.0</h1>
+            <h1 style='margin: 0; font-size: 56px; color: #00D9FF;'>⚔️ SIEC v4.0</h1>
             <p style='color: #FFD700; font-size: 24px; margin: 15px 0;'>
                 Sistema Integrado de Evaluación de Capacidades
             </p>
             <p style='color: #AAAAAA; font-size: 14px; margin: 5px 0;'>
-                Arquitectura Modular Multicapacidad | Defense Analytics Engine
+                Arquitectura Modular Multicapacidad | Weighted Strategic Scoring
             </p>
             <p style='color: #00D9FF; font-size: 12px; margin: 10px 0;'>
-                NATO DOTMLPF Framework | Lakehouse Hybrid Architecture | NLP Intelligence
+                NATO DOTMLPF Framework | Real OOB FAE | NLP Intelligence
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -855,7 +905,6 @@ def render_landing_page():
     st.markdown("<h2 style='text-align: center; color: #FFD700;'>📊 SELECCIONE CAPACIDAD ESTRATÉGICA</h2>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Grid de capacidades
     cols = st.columns(2)
 
     for idx, (cap_key, cap_info) in enumerate(STRATEGIC_CAPABILITIES.items()):
@@ -886,40 +935,32 @@ def render_landing_page():
             else:
                 st.button(f"🔒 {cap_info['name']} (Próximamente)", key=f"btn_{cap_key}", disabled=True, use_container_width=True)
 
-    # Footer
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
         <div style='text-align: center; color: #666; font-size: 11px; padding: 20px; border-top: 1px solid #333;'>
-            <b>SIEC Defense Analytics Platform v3.0</b> | Multi-Capability Architecture<br>
-            Powered by Streamlit + Pandas + Plotly | NATO UNCLASSIFIED<br>
-            <i>Sistema de Evaluación Estratégica de Capacidades Militares</i>
+            <b>SIEC Defense Analytics Platform v4.0</b> | Weighted Strategic Scoring<br>
+            Real OOB FAE (15 Units) | Powered by Streamlit + Pandas + Plotly | NATO UNCLASSIFIED<br>
+            <i>Sistema de Evaluación Estratégica de Capacidades Militares con Scoring Ponderado</i>
         </div>
     """, unsafe_allow_html=True)
 
 
 # ============================================================================
-# MÓDULO 10: DASHBOARD PRINCIPAL (POR CAPACIDAD)
+# MÓDULO 10: DASHBOARD CON CONTROLES DE PESOS (v4.0)
 # ============================================================================
 
 def render_dashboard(capability: str):
-    """
-    Dashboard analítico específico por capacidad.
-
-    Args:
-        capability: Capacidad estratégica seleccionada
-    """
+    """Dashboard con controles de pesos DOTMLPF estratégicos."""
 
     cap_info = STRATEGIC_CAPABILITIES[capability]
 
-    # Configuración de página
     st.set_page_config(
-        page_title=f"SIEC | {cap_info['name']}",
+        page_title=f"SIEC v4.0 | {cap_info['name']}",
         page_icon=cap_info['icon'],
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
-    # CSS Custom
     st.markdown("""
         <style>
         .main {background-color: #0E1117;}
@@ -929,7 +970,6 @@ def render_dashboard(capability: str):
         </style>
     """, unsafe_allow_html=True)
 
-    # Header
     st.markdown(f"""
         <div style='text-align: center; padding: 20px; background: linear-gradient(90deg, #000428 0%, #004e92 100%); border-radius: 10px;'>
             <h1 style='margin: 0; font-size: 42px;'>{cap_info['icon']} {cap_info['name']}</h1>
@@ -937,7 +977,7 @@ def render_dashboard(capability: str):
                 {cap_info['description']}
             </p>
             <p style='color: #FFD700; font-size: 11px; margin: 5px 0;'>
-                SIEC v3.0 | NATO DOTMLPF Analysis Framework
+                SIEC v4.0 | Weighted DOTMLPF Analysis | OOB FAE Real
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -946,21 +986,59 @@ def render_dashboard(capability: str):
 
     # Cargar datos
     with st.spinner(f'🔄 Procesando datos de {cap_info["name"]}...'):
-        df_budget, df_reports, df_metrics = load_and_process_data(capability)
+        df_budget, df_reports = load_and_process_data(capability)
 
-    # Sidebar
+    # Sidebar con controles de pesos
     with st.sidebar:
         st.markdown(f"## {cap_info['icon']} {cap_info['name']}")
         st.markdown("---")
 
-        # Botón volver
         if st.button("⬅️ VOLVER AL INICIO", use_container_width=True):
             st.session_state.page = 'landing'
             st.session_state.selected_capability = None
             st.rerun()
 
         st.markdown("---")
+
+        # CONTROLES DE PESOS ESTRATÉGICOS (v4.0)
+        with st.expander("⚙️ CONFIGURACIÓN ESTRATÉGICA (PESOS DOTMLPF)", expanded=False):
+            st.markdown("**Ajuste de Pesos por Componente:**")
+            st.markdown("<small>Modifique los pesos según prioridades estratégicas</small>", unsafe_allow_html=True)
+
+            weights = {}
+            weight_sum = 0
+
+            for component, full_name in DOTMLPF_TAXONOMY.items():
+                default_weight = DEFAULT_DOTMLPF_WEIGHTS.get(component, 0.0)
+
+                weight_pct = st.slider(
+                    f"{component} - {full_name}",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=default_weight * 100,
+                    step=0.1,
+                    key=f"weight_{component}",
+                    help=f"Peso estratégico para {full_name}"
+                )
+
+                weights[component] = weight_pct / 100
+                weight_sum += weight_pct
+
+            # Validación de pesos
+            if abs(weight_sum - 100.0) > 0.1:
+                st.warning(f"⚠️ La suma de pesos es {weight_sum:.1f}%. Debe ser 100%.")
+                st.markdown(f"**Diferencia:** {weight_sum - 100:.1f}%")
+            else:
+                st.success(f"✅ Pesos válidos: {weight_sum:.1f}%")
+
+            if st.button("🔄 Restaurar Pesos Default", use_container_width=True):
+                st.rerun()
+
+        st.markdown("---")
         st.markdown("### 📊 MÉTRICAS EJECUTIVAS")
+
+        # Calcular métricas con pesos actuales
+        df_metrics = calculate_quality_metrics(df_budget, df_reports, weights)
 
         total_asignado = df_budget['Monto_Asignado'].sum()
         total_ejecutado = df_budget['Monto_Ejecutado'].sum()
@@ -969,15 +1047,17 @@ def render_dashboard(capability: str):
 
         st.metric("Presupuesto Asignado", f"${total_asignado:,.0f}")
         st.metric("Presupuesto Ejecutado", f"${total_ejecutado:,.0f}", delta=f"{ejecucion_global:.1f}%")
-        st.metric("Alistamiento Promedio", f"{alistamiento_promedio:.1f}%")
+        st.metric("Alistamiento Ponderado", f"{alistamiento_promedio:.1f}%",
+                 help="Calculado con pesos DOTMLPF estratégicos")
 
         st.markdown("---")
         st.markdown("### 🔍 FILTROS")
 
         selected_units = st.multiselect(
-            "Unidades",
+            "Unidades FAE",
             options=df_budget['Unidad_Beneficiaria'].unique(),
-            default=df_budget['Unidad_Beneficiaria'].unique()
+            default=df_budget['Unidad_Beneficiaria'].unique(),
+            help="Orden de Batalla real FAE"
         )
 
     # Aplicar filtros
@@ -993,7 +1073,7 @@ def render_dashboard(capability: str):
 
     # TAB 1
     with tab1:
-        st.markdown("## 🎯 ANÁLISIS DOTMLPF")
+        st.markdown("## 🎯 ANÁLISIS DOTMLPF PONDERADO")
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1001,24 +1081,25 @@ def render_dashboard(capability: str):
         with col2:
             st.metric("Inversión Total", f"${df_budget_filtered['Monto_Ejecutado'].sum():,.0f}")
         with col3:
-            gaps = (create_dotmlpf_matrix(df_budget_filtered) == 0).sum().sum()
+            matrix = create_dotmlpf_matrix(df_budget_filtered, weights)
+            gaps = (matrix == 0).sum().sum()
             st.metric("Gaps Detectados", gaps, delta="Requieren atención", delta_color="inverse")
 
         st.markdown("---")
 
-        render_dotmlpf_heatmap(df_budget_filtered)
+        render_dotmlpf_heatmap(df_budget_filtered, weights)
 
         st.markdown("---")
 
         col_radar, col_table = st.columns(2)
 
         with col_radar:
-            render_radar_chart(df_budget_filtered)
+            render_radar_chart(df_budget_filtered, weights)
 
         with col_table:
             st.markdown("### 📋 TOP 10 PARTIDAS")
             top_partidas = df_budget_filtered.nlargest(10, 'Monto_Ejecutado')[
-                ['Descripcion', 'Monto_Ejecutado', 'DOTMLPF_Tag']
+                ['Descripcion', 'Unidad_Beneficiaria', 'Monto_Ejecutado', 'DOTMLPF_Tag']
             ]
             st.dataframe(
                 top_partidas.style.format({'Monto_Ejecutado': '${:,.0f}'}),
@@ -1028,7 +1109,7 @@ def render_dashboard(capability: str):
 
     # TAB 2
     with tab2:
-        st.markdown("## 💰 GOBERNANZA FINANCIERA")
+        st.markdown("## 💰 GOBERNANZA FINANCIERA (Scoring Ponderado)")
 
         cuadrante_counts = df_metrics_filtered['Cuadrante'].value_counts()
 
@@ -1045,6 +1126,23 @@ def render_dashboard(capability: str):
         st.markdown("---")
 
         render_efficiency_matrix(df_metrics_filtered)
+
+        st.markdown("---")
+
+        st.markdown("### 📊 DETALLE DE SCORING PONDERADO")
+        st.dataframe(
+            df_metrics_filtered[[
+                'Unidad_Beneficiaria', 'Ejecucion_Pct', 'Alistamiento_Ponderado',
+                'Alistamiento_NLP', 'Alistamiento_Pct', 'Cuadrante'
+            ]].style.format({
+                'Ejecucion_Pct': '{:.1f}%',
+                'Alistamiento_Ponderado': '{:.1f}%',
+                'Alistamiento_NLP': '{:.1f}%',
+                'Alistamiento_Pct': '{:.1f}%'
+            }).background_gradient(subset=['Alistamiento_Pct'], cmap='RdYlGn'),
+            use_container_width=True,
+            height=400
+        )
 
     # TAB 3
     with tab3:
@@ -1083,23 +1181,18 @@ def render_dashboard(capability: str):
 # ============================================================================
 
 def main():
-    """
-    Orquestador principal con navegación por session_state.
-    """
+    """Orquestador principal con navegación por session_state."""
 
-    # Inicializar session state
     if 'page' not in st.session_state:
         st.session_state.page = 'landing'
     if 'selected_capability' not in st.session_state:
         st.session_state.selected_capability = None
 
-    # Routing
     if st.session_state.page == 'landing':
         render_landing_page()
     elif st.session_state.page == 'dashboard' and st.session_state.selected_capability:
         render_dashboard(st.session_state.selected_capability)
     else:
-        # Fallback
         st.session_state.page = 'landing'
         st.rerun()
 
