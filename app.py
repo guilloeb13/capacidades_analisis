@@ -1,12 +1,20 @@
 """
-SIEC v5.0: Sistema Integrado de Evaluación de Capacidades
+SIEC v5.1: Sistema Integrado de Evaluación de Capacidades
 ==========================================================
-Ingesta Real de Datos + Desambiguación Inteligente
+Referencia Doctrinal JCIDS & Mapeo de Fuentes Reales
 
 Autor: Lead Data Scientist - OTAN Defense Analytics
-Arquitectura: Lakehouse Híbrido + ETL + Weighted Scoring Algorithm
+Arquitectura: Lakehouse Híbrido + ETL + Weighted Scoring Algorithm + JCIDS Framework
 Framework: Streamlit + Pandas + Plotly + PDFPlumber
-Versión: 5.0 (Real Data Ingestion + Intelligent Classification)
+Versión: 5.1 (DOTmLPF-P + Doctrinal Reference + Real Data Mapping)
+
+CHANGELOG v5.1:
+- Taxonomía DOTmLPF-P completa (incluye Policy/Políticas)
+- Nueva página "Información & Doctrina" con referencia JCIDS
+- Mapeo de fuentes reales de datos institucionales
+- Definiciones doctrinales por componente
+- Explicación de gráfico Radar (Estado Actual vs Meta Operativa)
+- Generación de datos actualizada con Policy
 
 CHANGELOG v5.0:
 - Selector de modo: Simulación vs Ingesta Real
@@ -75,16 +83,17 @@ MILITARY_UNITS = [
     "Dirección de Planificación (DIRPLAN)"
 ]
 
-# PESOS ESTRATÉGICOS DOTMLPF (Planificación Estratégica FAE)
-# Basados en doctrina y prioridades institucionales
+# PESOS ESTRATÉGICOS DOTmLPF-P (Planificación Estratégica FAE) - v5.1
+# Basados en doctrina JCIDS y prioridades institucionales
 DEFAULT_DOTMLPF_WEIGHTS = {
-    'M': 0.200,  # Material - 20.0%
-    'F': 0.138,  # Facilities - 13.8%
-    'P': 0.166,  # Personnel - 16.6%
-    'T': 0.194,  # Training - 19.4%
-    'D': 0.151,  # Doctrine - 15.1%
-    'O': 0.151,  # Organization - 15.1%
-    'L': 0.000   # Leadership - Distribuido en otros
+    'D': 0.125,   # Doctrine - 12.5%
+    'O': 0.125,   # Organization - 12.5%
+    'T': 0.175,   # Training - 17.5%
+    'M': 0.200,   # Materiel - 20.0%
+    'L': 0.000,   # Leadership - Distribuido en otros
+    'P': 0.175,   # Personnel - 17.5%
+    'F': 0.125,   # Facilities - 12.5%
+    'Pol': 0.075  # Policy - 7.5%
 }
 
 # Capacidades Estratégicas del Sistema
@@ -115,27 +124,84 @@ STRATEGIC_CAPABILITIES = {
     }
 }
 
-# Taxonomía DOTMLPF (NATO Standard)
+# Taxonomía DOTmLPF-P (JCIDS Framework) - v5.1
 DOTMLPF_TAXONOMY = {
     'D': 'Doctrine',
     'O': 'Organization',
     'T': 'Training',
-    'M': 'Material',
+    'M': 'Materiel',
     'L': 'Leadership',
     'P': 'Personnel',
-    'F': 'Facilities'
+    'F': 'Facilities',
+    'Pol': 'Policy'
 }
 
 # Códigos Presupuestarios (Sistema eSIGEF Ecuatoriano)
 BUDGET_CODE_MAPPING = {
-    '51': 'P',  # Personal
-    '53': 'T',  # Bienes/Servicios/Training
-    '71': 'M',  # Inversión en Material
-    '84': 'M',  # Material Estratégico
-    '75': 'F',  # Infraestructura
-    '57': 'O',  # Organización/Asesoría
-    '58': 'D'   # Doctrina/Estudios
+    '51': 'P',    # Personal
+    '53': 'T',    # Bienes/Servicios/Training
+    '71': 'M',    # Inversión en Material
+    '84': 'M',    # Material Estratégico
+    '75': 'F',    # Infraestructura
+    '57': 'O',    # Organización/Asesoría
+    '58': 'D',    # Doctrina/Estudios
+    '59': 'Pol'   # Policy/Convenios/Acuerdos Internacionales
 }
+
+# ============================================================================
+# DEFINICIONES DOCTRINALES JCIDS & MAPEO DE FUENTES REALES (v5.1)
+# ============================================================================
+
+DEFINICIONES_DOTMLPFP = [
+    {
+        'Componente': 'D - Doctrine (Doctrina)',
+        'Definición JCIDS': 'Principios fundamentales que guían las fuerzas militares en el apoyo de objetivos nacionales. Incluye tácticas, técnicas y procedimientos (TTP).',
+        'Fuente de Información Real': 'Partida 58 (Estudios & Consultoría Doctrinal), Manuales PDF institucionales, Publicaciones Conjuntas (JP-3), Directivas operacionales.',
+        'Ejemplos Institucionales': 'Manual de Operaciones Aéreas, Doctrina de Combate Aéreo, TTP Interoperabilidad FAE-Ejército'
+    },
+    {
+        'Componente': 'O - Organization (Organización)',
+        'Definición JCIDS': 'Estructura organizacional, relaciones de mando, y alineación de fuerzas para cumplir misiones. Incluye tablas de organización y equipo (TOE).',
+        'Fuente de Información Real': 'Partida 57 (Asesoría Organizacional), Reportes de Reestructuración, Organigramas institucionales, Planes de Transformación.',
+        'Ejemplos Institucionales': 'Creación de COCIBER, Reorganización de Alas de Combate, Integración SpOC'
+    },
+    {
+        'Componente': 'T - Training (Entrenamiento)',
+        'Definición JCIDS': 'Instrucción especializada y entrenamiento del personal para operar sistemas y ejecutar misiones. Incluye certificaciones y estándares de competencia.',
+        'Fuente de Información Real': 'Partida 53 (Cursos & Capacitación), Horas de Vuelo registradas, Simuladores Full Mission, Certificaciones de pilotos, Programas ESMA.',
+        'Ejemplos Institucionales': 'Curso de Combate Aéreo Avanzado, Entrenamiento IFR, Certificación instructores, Tiro Real'
+    },
+    {
+        'Componente': 'M - Materiel (Material)',
+        'Definición JCIDS': 'Todo el equipamiento, suministros y sistemas de armas necesarios para equipar, operar, mantener y apoyar actividades militares.',
+        'Fuente de Información Real': 'Partida 71/84 (Inversiones), Sistema de Disponibilidad de Aeronaves, Reportes PDM, Inventario de Repuestos, Key Performance Parameters (KPP).',
+        'Ejemplos Institucionales': 'Repuestos Super Tucano, Munición aérea, Radares, Overhaul de motores, Asientos eyectables'
+    },
+    {
+        'Componente': 'L - Leadership (Liderazgo)',
+        'Definición JCIDS': 'Desarrollo de líderes militares a través de educación profesional, experiencia operacional y programas de mentoría.',
+        'Fuente de Información Real': 'Cursos de Educación Militar Continua, Programas de Ascenso, Escuelas de Guerra, Diplomados estratégicos.',
+        'Ejemplos Institucionales': 'Curso de Estado Mayor, Diplomado en Estrategia Militar, Programa de Desarrollo de Oficiales'
+    },
+    {
+        'Componente': 'P - Personnel (Personal)',
+        'Definición JCIDS': 'Recursos humanos necesarios para operar y mantener sistemas. Incluye cantidad, calidad, especialidades y gestión de talento.',
+        'Fuente de Información Real': 'Partida 51 (Nómina), Partes de Personal (Déficit/Superávit por especialidad), Reportes de RRHH, Planes de carrera.',
+        'Ejemplos Institucionales': 'Pilotos de combate, Personal aerotécnico, Especialistas en ciberdefensa, Controladores aéreos'
+    },
+    {
+        'Componente': 'F - Facilities (Instalaciones)',
+        'Definición JCIDS': 'Infraestructura física requerida para operar, entrenar, mantener y almacenar material. Incluye bases, hangares y sistemas de soporte.',
+        'Fuente de Información Real': 'Partida 75 (Infraestructura), Planes MILCON (Military Construction), Reportes de mantenimiento de instalaciones.',
+        'Ejemplos Institucionales': 'Pistas de aterrizaje, Hangares de alerta, Bunkers de comando, Torres de control, Sistemas de iluminación'
+    },
+    {
+        'Componente': 'Pol - Policy (Políticas)',
+        'Definición JCIDS': 'Marco legal, normativo y político que gobierna el empleo de capacidades militares. Incluye restricciones, acuerdos internacionales y directrices estratégicas.',
+        'Fuente de Información Real': 'Restricciones legales detectadas en Reportes NLP, Convenios Internacionales (TIAR, SICOFAA), Acuerdos de Cooperación, ROE (Rules of Engagement).',
+        'Ejemplos Institucionales': 'Convenio de cooperación FAE-USAF, Restricciones de uso de fuerza letal, Políticas de exportación de armamento'
+    }
+]
 
 # Keywords para clasificación de CAPACIDADES
 CAPABILITY_KEYWORDS = {
@@ -212,7 +278,7 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
     np.random.seed(42)
     random.seed(42)
 
-    # Partidas C2
+    # Partidas C2 (v5.1 - incluye Policy)
     c2_items = [
         ('Licencias Software C2', '530801', 'T', 'C2'),
         ('Radios HF Tácticas', '840101', 'M', 'C2'),
@@ -233,10 +299,12 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         ('Fibra Óptica Redundante', '750103', 'F', 'C2'),
         ('Curso Liderazgo Táctico', '530503', 'L', 'C2'),
         ('Repuestos Sistema Radar', '530202', 'M', 'C2'),
-        ('Análisis Vulnerabilidades', '580102', 'D', 'C2')
+        ('Análisis Vulnerabilidades', '580102', 'D', 'C2'),
+        ('Convenio Cooperación Interagencias', '590101', 'Pol', 'C2'),  # v5.1
+        ('Acuerdo Intercambio Información', '590102', 'Pol', 'C2')      # v5.1
     ]
 
-    # Partidas Maniobra
+    # Partidas Maniobra (v5.1 - incluye Policy)
     maniobra_items = [
         ('Sueldos Pilotos Combate', '510201', 'P', 'MANIOBRA'),
         ('Bonificación Vuelo', '510202', 'P', 'MANIOBRA'),
@@ -263,7 +331,9 @@ def generate_structured_data(capability: str = None) -> pd.DataFrame:
         ('Mantenimiento Pista Principal', '750201', 'F', 'MANIOBRA'),
         ('Construcción Hangar Alerta', '750202', 'F', 'MANIOBRA'),
         ('Modernización Torre Control', '750203', 'F', 'MANIOBRA'),
-        ('Sistema Iluminación Pista', '750204', 'F', 'MANIOBRA')
+        ('Sistema Iluminación Pista', '750204', 'F', 'MANIOBRA'),
+        ('Tratado Cooperación USAF', '590201', 'Pol', 'MANIOBRA'),        # v5.1
+        ('Restricción Uso Munición Cluster', '590202', 'Pol', 'MANIOBRA')  # v5.1
     ]
 
     records = []
@@ -509,11 +579,11 @@ def classify_operational_level(description: str, capability: str) -> str:
 
 def clasificar_partida_inteligente(codigo: str, descripcion: str, unidad: str) -> Tuple[str, str]:
     """
-    FUNCIÓN DE DESAMBIGUACIÓN INTELIGENTE (v5.0)
+    FUNCIÓN DE DESAMBIGUACIÓN INTELIGENTE (v5.1)
 
     Clasifica una partida presupuestaria en:
     1. Capacidad estratégica (C2, MANIOBRA, CIBERDEFENSA, LOGISTICA)
-    2. Tag DOTMLPF (D, O, T, M, L, P, F)
+    2. Tag DOTmLPF-P (D, O, T, M, L, P, F, Pol)
 
     Reglas de negocio:
     - Primero intenta clasificar por keywords en descripción
@@ -526,7 +596,7 @@ def clasificar_partida_inteligente(codigo: str, descripcion: str, unidad: str) -
         unidad: Unidad beneficiaria
 
     Returns:
-        Tuple (capacidad, tag_dotmlpf)
+        Tuple (capacidad, tag_dotmlpfp)
     """
 
     desc_lower = descripcion.lower()
@@ -567,11 +637,11 @@ def clasificar_partida_inteligente(codigo: str, descripcion: str, unidad: str) -
     else:
         capacidad = max(capability_scores, key=capability_scores.get)
 
-    # PASO 3: Clasificación de DOTMLPF por código presupuestario
+    # PASO 3: Clasificación de DOTmLPF-P por código presupuestario
     codigo_prefix = codigo[:2] if len(codigo) >= 2 else ''
     tag_dotmlpf = BUDGET_CODE_MAPPING.get(codigo_prefix, 'O')  # Default: Organization
 
-    # Refinamiento por keywords si es necesario
+    # Refinamiento por keywords si es necesario (v5.1 - incluye Policy)
     if tag_dotmlpf == 'O':  # Si el código no fue específico, usar keywords
         if any(word in desc_lower for word in ['capacitación', 'curso', 'entrenamiento', 'simulador']):
             tag_dotmlpf = 'T'
@@ -583,6 +653,8 @@ def clasificar_partida_inteligente(codigo: str, descripcion: str, unidad: str) -
             tag_dotmlpf = 'F'
         elif any(word in desc_lower for word in ['doctrina', 'estudio', 'investigación']):
             tag_dotmlpf = 'D'
+        elif any(word in desc_lower for word in ['convenio', 'acuerdo', 'tratado', 'política', 'restricción', 'normativa', 'legal']):
+            tag_dotmlpf = 'Pol'  # Policy (v5.1)
 
     return capacidad, tag_dotmlpf
 
@@ -1272,7 +1344,237 @@ def render_efficiency_matrix(df_metrics: pd.DataFrame):
 
 
 # ============================================================================
-# MÓDULO 9: LANDING PAGE
+# MÓDULO 9: PÁGINA DE INFORMACIÓN DOCTRINAL (v5.1)
+# ============================================================================
+
+def mostrar_pagina_informacion():
+    """
+    Página de Información Doctrinal JCIDS & Mapeo de Fuentes Reales (v5.1)
+
+    Explica al usuario cómo el sistema mapea los componentes DOTmLPF-P
+    utilizando fuentes de datos reales de la institución.
+    """
+
+    st.set_page_config(
+        page_title="SIEC v5.1 | Información Doctrinal",
+        page_icon="📚",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+
+    st.markdown("""
+        <style>
+        .main {background-color: #0E1117;}
+        h1 {color: #00D9FF; font-family: 'Arial Black', sans-serif;}
+        h2 {color: #FFD700; border-bottom: 2px solid #FFD700; padding-bottom: 10px;}
+        h3 {color: #00FF00;}
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Header
+    st.markdown("""
+        <div style='text-align: center; padding: 30px; background: linear-gradient(90deg, #000428 0%, #004e92 100%); border-radius: 10px;'>
+            <h1 style='margin: 0; font-size: 42px;'>📚 INFORMACIÓN & DOCTRINA</h1>
+            <p style='color: #00D9FF; font-size: 18px; margin: 10px 0;'>
+                Framework JCIDS DOTmLPF-P | Mapeo de Fuentes Reales de Datos
+            </p>
+            <p style='color: #FFD700; font-size: 12px; margin: 5px 0;'>
+                SIEC v5.1 | Joint Capabilities Integration and Development System
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Botón para volver
+    if st.button("⬅️ VOLVER AL INICIO", use_container_width=True):
+        st.session_state.page = 'landing'
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Explicación General
+    st.markdown("## 🎯 Marco Conceptual")
+
+    st.markdown("""
+    El sistema **SIEC** utiliza el framework **DOTmLPF-P** (Doctrine, Organization, Training, Materiel,
+    Leadership, Personnel, Facilities, Policy) del **JCIDS** (Joint Capabilities Integration and Development System)
+    para evaluar capacidades militares de manera integral.
+
+    ### ¿Qué es DOTmLPF-P?
+
+    DOTmLPF-P es la taxonomía estándar utilizada por el Departamento de Defensa de EE.UU. y adoptada por
+    aliados NATO/TIAR para analizar brechas de capacidades y planificar inversiones estratégicas.
+
+    **Cada componente representa una dimensión crítica** del poder militar:
+    """)
+
+    # Tabla de Definiciones JCIDS
+    st.markdown("## 📖 Definiciones JCIDS & Mapeo de Datos Institucionales")
+
+    st.markdown("""
+    La siguiente tabla muestra cómo el sistema SIEC **mapea cada componente doctrinal** a **fuentes de información reales**
+    de la Fuerza Aérea Ecuatoriana:
+    """)
+
+    # Convertir a DataFrame para mostrar tabla estilizada
+    df_definiciones = pd.DataFrame(DEFINICIONES_DOTMLPFP)
+
+    # Mostrar tabla interactiva
+    st.dataframe(
+        df_definiciones,
+        use_container_width=True,
+        height=600,
+        column_config={
+            "Componente": st.column_config.TextColumn("Componente DOTmLPF-P", width="medium"),
+            "Definición JCIDS": st.column_config.TextColumn("Definición (JCIDS Framework)", width="large"),
+            "Fuente de Información Real": st.column_config.TextColumn("Fuente de Datos Institucional", width="large"),
+            "Ejemplos Institucionales": st.column_config.TextColumn("Ejemplos FAE", width="medium")
+        }
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Explicación del Gráfico de Radar
+    st.markdown("## 📊 Interpretación del Gráfico de Radar")
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.markdown("""
+        ### Estado Actual vs Meta Operativa
+
+        El **Gráfico de Radar** en el **TAB 1: Situational Awareness** compara dos dimensiones:
+
+        1. **Estado Actual (Línea Azul):**
+           - Calculado por el sistema basándose en los datos reales ingresados
+           - Representa el **% de ejecución presupuestaria** por componente DOTmLPF-P
+           - Fórmula: `(Monto Ejecutado / Monto Asignado) × 100`
+
+        2. **Meta Operativa (Línea Roja Punteada):**
+           - Definida por los **Pesos Estratégicos configurables** en el sidebar
+           - Representa la **distribución ideal** del presupuesto según prioridades institucionales
+           - Ejemplo: Si M=20%, significa que el 20% del presupuesto debería invertirse en Material
+
+        ### Interpretación de Brechas
+
+        - **Estado Actual > Meta:** Sobre-inversión en ese componente (posible optimización)
+        - **Estado Actual < Meta:** Sub-inversión (brecha de capacidad identificada)
+        - **Estado Actual ≈ Meta:** Alineación estratégica correcta
+        """)
+
+    with col2:
+        st.markdown("""
+        ### Ejemplo Práctico
+
+        **Escenario:** Ala de Combate Nro. 21
+
+        | Componente | Estado Actual | Meta Operativa | Análisis |
+        |------------|---------------|----------------|----------|
+        | Material (M) | 85% | 20% | ✅ Alta ejecución |
+        | Training (T) | 45% | 17.5% | ⚠️ Sub-ejecución |
+        | Personnel (P) | 92% | 17.5% | ✅ Ejecución óptima |
+        | Facilities (F) | 30% | 12.5% | ⚠️ Brecha identificada |
+
+        **Recomendación:**
+        - Priorizar inversión en **Facilities** (infraestructura)
+        - Incrementar ejecución en **Training** (capacitación)
+        - Material está bien financiado
+
+        ### Fórmula de Alistamiento Ponderado
+
+        ```
+        Alistamiento = Σ (Ejecución_i × Peso_i) × 0.7 + NLP_Score × 0.3
+        ```
+
+        Donde:
+        - **70%** proviene del análisis presupuestario ponderado
+        - **30%** proviene del análisis NLP de reportes operativos
+        """)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Flujo de Datos
+    st.markdown("## 🔄 Flujo de Datos en SIEC")
+
+    st.markdown("""
+    ```
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                  FUENTES DE DATOS REALES                         │
+    ├─────────────────────────────────────────────────────────────────┤
+    │  📂 Excel eSIGEF     │  📄 PDFs Operativos  │  💾 BD PostgreSQL │
+    │  (Presupuesto)       │  (Reportes)          │  (Institucional)  │
+    └──────────┬───────────┴──────────┬────────────┴──────────┬────────┘
+               │                      │                       │
+               ▼                      ▼                       ▼
+    ┌──────────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+    │  Normalización de    │  │  Extracción     │  │  Query SQL      │
+    │  Columnas Excel      │  │  Texto PDF      │  │  Directo        │
+    └──────────┬───────────┘  └────────┬────────┘  └────────┬────────┘
+               │                       │                    │
+               └───────────────────────┴────────────────────┘
+                                       │
+                                       ▼
+                         ┌─────────────────────────────┐
+                         │  CLASIFICACIÓN INTELIGENTE  │
+                         │  clasificar_partida_        │
+                         │  inteligente()              │
+                         │                             │
+                         │  1. Scoring de Keywords     │
+                         │  2. Desempate por Unidad    │
+                         │  3. Mapeo Código eSIGEF     │
+                         └──────────┬──────────────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────────┐
+                         │  CATEGORIZACIÓN DOTmLPF-P│
+                         │                          │
+                         │  D: Doctrine             │
+                         │  O: Organization         │
+                         │  T: Training             │
+                         │  M: Materiel             │
+                         │  L: Leadership           │
+                         │  P: Personnel            │
+                         │  F: Facilities           │
+                         │  Pol: Policy             │
+                         └──────────┬───────────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────────┐
+                         │  ANÁLISIS & SCORING      │
+                         │                          │
+                         │  • Scoring Ponderado     │
+                         │  • NLP Sentiment         │
+                         │  • Matriz de Eficiencia  │
+                         └──────────┬───────────────┘
+                                    │
+                                    ▼
+                         ┌──────────────────────────┐
+                         │  VISUALIZACIONES         │
+                         │                          │
+                         │  📊 Radar Chart          │
+                         │  🔥 Heatmap DOTMLPF      │
+                         │  📈 Scatter Matrix       │
+                         │  📉 NLP Analytics        │
+                         └──────────────────────────┘
+    ```
+    """)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; color: #666; font-size: 11px; padding: 20px;'>
+            <b>SIEC Defense Analytics Platform v5.1</b> | DOTmLPF-P JCIDS Framework<br>
+            Real OOB FAE (15 Units) | Powered by Streamlit + Pandas + Plotly | NATO UNCLASSIFIED<br>
+            <i>Sistema de Evaluación Estratégica con Referencia Doctrinal y Mapeo de Fuentes Reales</i>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+# ============================================================================
+# MÓDULO 10: LANDING PAGE
 # ============================================================================
 
 def render_landing_page():
@@ -1280,18 +1582,27 @@ def render_landing_page():
 
     st.markdown("""
         <div style='text-align: center; padding: 40px; background: linear-gradient(135deg, #000428 0%, #004e92 100%); border-radius: 15px; margin-bottom: 40px;'>
-            <h1 style='margin: 0; font-size: 56px; color: #00D9FF;'>⚔️ SIEC v4.0</h1>
+            <h1 style='margin: 0; font-size: 56px; color: #00D9FF;'>⚔️ SIEC v5.1</h1>
             <p style='color: #FFD700; font-size: 24px; margin: 15px 0;'>
                 Sistema Integrado de Evaluación de Capacidades
             </p>
             <p style='color: #AAAAAA; font-size: 14px; margin: 5px 0;'>
-                Arquitectura Modular Multicapacidad | Weighted Strategic Scoring
+                DOTmLPF-P JCIDS Framework | Real Data Ingestion | Intelligent Classification
             </p>
             <p style='color: #00D9FF; font-size: 12px; margin: 10px 0;'>
-                NATO DOTMLPF Framework | Real OOB FAE | NLP Intelligence
+                Doctrine | Organization | Training | Materiel | Leadership | Personnel | Facilities | Policy
             </p>
         </div>
     """, unsafe_allow_html=True)
+
+    # Botón de Información Doctrinal
+    col_info = st.columns([1, 2, 1])
+    with col_info[1]:
+        if st.button("📚 INFORMACIÓN & DOCTRINA (JCIDS)", use_container_width=True):
+            st.session_state.page = 'informacion'
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("<h2 style='text-align: center; color: #FFD700;'>📊 SELECCIONE CAPACIDAD ESTRATÉGICA</h2>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
@@ -1329,7 +1640,7 @@ def render_landing_page():
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
         <div style='text-align: center; color: #666; font-size: 11px; padding: 20px; border-top: 1px solid #333;'>
-            <b>SIEC Defense Analytics Platform v5.0</b> | Real Data Ingestion + Intelligent Classification<br>
+            <b>SIEC Defense Analytics Platform v5.1</b> | DOTmLPF-P JCIDS Framework + Real Data Ingestion<br>
             Real OOB FAE (15 Units) | Excel ETL + PDF Processing | NATO UNCLASSIFIED<br>
             <i>Sistema de Evaluación Estratégica con Ingesta Real de Datos Institucionales</i>
         </div>
@@ -1346,7 +1657,7 @@ def render_dashboard(capability: str):
     cap_info = STRATEGIC_CAPABILITIES[capability]
 
     st.set_page_config(
-        page_title=f"SIEC v5.0 | {cap_info['name']}",
+        page_title=f"SIEC v5.1 | {cap_info['name']}",
         page_icon=cap_info['icon'],
         layout="wide",
         initial_sidebar_state="expanded"
@@ -1368,7 +1679,7 @@ def render_dashboard(capability: str):
                 {cap_info['description']}
             </p>
             <p style='color: #FFD700; font-size: 11px; margin: 5px 0;'>
-                SIEC v5.0 | Real Data Ingestion + Weighted DOTMLPF Analysis | OOB FAE Real
+                SIEC v5.1 | DOTmLPF-P JCIDS Framework | Real Data Ingestion | OOB FAE Real
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -1633,7 +1944,7 @@ def render_dashboard(capability: str):
 # ============================================================================
 
 def main():
-    """Orquestador principal con navegación por session_state."""
+    """Orquestador principal con navegación por session_state (v5.1)."""
 
     if 'page' not in st.session_state:
         st.session_state.page = 'landing'
@@ -1642,6 +1953,8 @@ def main():
 
     if st.session_state.page == 'landing':
         render_landing_page()
+    elif st.session_state.page == 'informacion':
+        mostrar_pagina_informacion()  # Nueva página v5.1
     elif st.session_state.page == 'dashboard' and st.session_state.selected_capability:
         render_dashboard(st.session_state.selected_capability)
     else:

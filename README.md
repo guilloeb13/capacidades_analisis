@@ -1,12 +1,32 @@
-# SIEC v5.0: Sistema Integrado de Evaluación de Capacidades
+# SIEC v5.1: Sistema Integrado de Evaluación de Capacidades
 
 ## 🎯 Descripción General
 
-POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de **múltiples capacidades militares** basado en el framework **DOTMLPF de la OTAN** con **ingesta real de datos institucionales**.
+POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de **múltiples capacidades militares** basado en el framework **DOTmLPF-P de JCIDS** con **ingesta real de datos institucionales** y **referencia doctrinal**.
 
-### **🆕 NUEVA VERSIÓN 5.0 - Ingesta Real de Datos + Desambiguación Inteligente**
+### **🆕 NUEVA VERSIÓN 5.1 - Referencia Doctrinal JCIDS & Mapeo de Fuentes Reales**
 
 Esta versión implementa:
+- ✅ **Taxonomía DOTmLPF-P Completa**: Incluye "Policy" como 8vo componente (D, O, T, M, L, P, F, Pol)
+- ✅ **Página de Información Doctrinal**: Nueva sección "📚 Información & Doctrina" con:
+  - Definiciones JCIDS oficiales de cada componente
+  - Mapeo de fuentes de datos reales institucionales (eSIGEF, PDFs, BD)
+  - Explicación del gráfico de Radar (Estado Actual vs Meta Operativa)
+  - Flujo completo de procesamiento de datos
+- ✅ **Mapeo de Fuentes Reales por Componente**:
+  - **D (Doctrine)**: Partida 58, Manuales PDF, Publicaciones JP-3
+  - **O (Organization)**: Partida 57, Reportes de reestructuración
+  - **T (Training)**: Partida 53, Horas de vuelo, Simuladores
+  - **M (Materiel)**: Partida 71/84, Sistema de disponibilidad, KPPs
+  - **L (Leadership)**: Educación Militar, Cursos de ascenso
+  - **P (Personnel)**: Partida 51, Partes de personal
+  - **F (Facilities)**: Partida 75, Planes MILCON
+  - **Pol (Policy)**: Partida 59, Convenios, ROE, Restricciones legales
+- ✅ **Generación de Datos con Policy**: Items de convenios y acuerdos internacionales
+- ✅ **Backward Compatibility**: Mantiene todas las funcionalidades v5.0 y v4.0
+
+### **VERSIÓN 5.0 - Ingesta Real de Datos + Desambiguación Inteligente**
+
 - ✅ **Selector de Modo**: Simulación (Demo) vs Ingesta Real de Datos
 - ✅ **File Uploader Excel**: Procesa archivos eSIGEF con normalización automática de columnas
 - ✅ **File Uploader PDF**: Extrae texto de reportes operativos con pdfplumber
@@ -14,7 +34,6 @@ Esta versión implementa:
 - ✅ **Clasificación por Keywords + Unidad**: Scoring automático y desempate por unidad beneficiaria
 - ✅ **Normalización de Datos**: Mapeo flexible de columnas Excel (Código/Codigo/Partida, etc.)
 - ✅ **Placeholder Conector BD**: Preparado para conexión directa a PostgreSQL/Oracle
-- ✅ **Backward Compatibility**: Modo simulación mantiene todas las funcionalidades v4.0
 
 ### **VERSIÓN 4.0 - Scoring Ponderado Estratégico**
 - ✅ **Pesos DOTMLPF configurables**: M: 20%, T: 19.4%, P: 16.6%, D: 15.1%, O: 15.1%, F: 13.8%
@@ -37,8 +56,8 @@ Esta versión implementa:
 - **Framework de Datos**: Lakehouse Híbrido (Datos Estructurados + NLP No Estructurado) + **ETL Real**
 - **Stack Tecnológico**: Python 3.8+ | Streamlit | Pandas | Plotly | NumPy | **pdfplumber** | **openpyxl**
 - **Ingesta de Datos**: Excel (eSIGEF) + PDFs + Placeholder PostgreSQL/Oracle
-- **Metodología**: NATO DOTMLPF Framework | Joint Publication 3-0
-- **Versión**: 5.0 (Real Data Ingestion + Intelligent Classification)
+- **Metodología**: JCIDS DOTmLPF-P Framework | Joint Publication 3-0
+- **Versión**: 5.1 (DOTmLPF-P + Doctrinal Reference + Real Data Mapping)
 - **Clasificación**: NATO UNCLASSIFIED
 
 ---
@@ -450,8 +469,8 @@ Para consultas sobre el sistema SIEC-C2, contactar al equipo de Defense Analytic
 ---
 
 **Última actualización**: 2026-01-18
-**Versión**: 5.0 (Real Data Ingestion + Intelligent Classification)
-**Status**: POC Funcional con Ingesta Real de Datos
-**Nuevas Capacidades v5.0**: 📂 Excel ETL | 📄 PDF Processing | 🧠 Desambiguación Inteligente | 💾 DB Connector Ready
+**Versión**: 5.1 (DOTmLPF-P + Doctrinal Reference + Real Data Mapping)
+**Status**: POC Funcional con Framework JCIDS Completo
+**Nuevas Capacidades v5.1**: 📚 Página Doctrinal JCIDS | 🏛️ Taxonomía DOTmLPF-P (8 componentes) | 🗺️ Mapeo Fuentes Reales | 📊 Explicación Radar Chart
+**Capacidades v5.0**: 📂 Excel ETL | 📄 PDF Processing | 🧠 Desambiguación Inteligente | 💾 DB Connector Ready
 **Capacidades v4.0**: ⚖️ Scoring Ponderado | 🏛️ OOB Real FAE (15 unidades)
-**Capacidades v3.0**: ✈️ Maniobra Aérea | 🎯 C2 | 🚀 Arquitectura Modular
