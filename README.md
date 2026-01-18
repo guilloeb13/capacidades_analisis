@@ -1,12 +1,28 @@
-# SIEC v3.0: Sistema Integrado de Evaluación de Capacidades
+# SIEC v5.0: Sistema Integrado de Evaluación de Capacidades
 
 ## 🎯 Descripción General
 
-POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de **múltiples capacidades militares** basado en el framework **DOTMLPF de la OTAN**.
+POC (Proof of Concept) funcional End-to-End de un sistema de análisis estratégico para evaluación de **múltiples capacidades militares** basado en el framework **DOTMLPF de la OTAN** con **ingesta real de datos institucionales**.
 
-### **NUEVA VERSIÓN 3.0 - Arquitectura Modular Multicapacidad**
+### **🆕 NUEVA VERSIÓN 5.0 - Ingesta Real de Datos + Desambiguación Inteligente**
 
 Esta versión implementa:
+- ✅ **Selector de Modo**: Simulación (Demo) vs Ingesta Real de Datos
+- ✅ **File Uploader Excel**: Procesa archivos eSIGEF con normalización automática de columnas
+- ✅ **File Uploader PDF**: Extrae texto de reportes operativos con pdfplumber
+- ✅ **Desambiguación Inteligente**: Función `clasificar_partida_inteligente()` con reglas de negocio
+- ✅ **Clasificación por Keywords + Unidad**: Scoring automático y desempate por unidad beneficiaria
+- ✅ **Normalización de Datos**: Mapeo flexible de columnas Excel (Código/Codigo/Partida, etc.)
+- ✅ **Placeholder Conector BD**: Preparado para conexión directa a PostgreSQL/Oracle
+- ✅ **Backward Compatibility**: Modo simulación mantiene todas las funcionalidades v4.0
+
+### **VERSIÓN 4.0 - Scoring Ponderado Estratégico**
+- ✅ **Pesos DOTMLPF configurables**: M: 20%, T: 19.4%, P: 16.6%, D: 15.1%, O: 15.1%, F: 13.8%
+- ✅ **Orden de Batalla Real FAE**: 15 unidades operativas reales
+- ✅ **Algoritmo de scoring ponderado**: Alistamiento = 70% weighted + 30% NLP
+- ✅ **Controles en Sidebar**: Ajuste de pesos con validación (suma 100%)
+
+### **VERSIÓN 3.0 - Arquitectura Modular Multicapacidad**
 - ✅ **Landing Page** de selección de capacidad estratégica
 - ✅ **Navegación dinámica** con st.session_state
 - ✅ **Soporte multicapacidad**: Mando y Control, Maniobra Aérea, Ciberdefensa*, Logística*
@@ -18,10 +34,11 @@ Esta versión implementa:
 
 ### Arquitectura Tecnológica
 
-- **Framework de Datos**: Lakehouse Híbrido (Datos Estructurados + NLP No Estructurado)
-- **Stack Tecnológico**: Python 3.8+ | Streamlit | Pandas | Plotly | NumPy
+- **Framework de Datos**: Lakehouse Híbrido (Datos Estructurados + NLP No Estructurado) + **ETL Real**
+- **Stack Tecnológico**: Python 3.8+ | Streamlit | Pandas | Plotly | NumPy | **pdfplumber** | **openpyxl**
+- **Ingesta de Datos**: Excel (eSIGEF) + PDFs + Placeholder PostgreSQL/Oracle
 - **Metodología**: NATO DOTMLPF Framework | Joint Publication 3-0
-- **Versión**: 3.0 (Multi-Capability Architecture)
+- **Versión**: 5.0 (Real Data Ingestion + Intelligent Classification)
 - **Clasificación**: NATO UNCLASSIFIED
 
 ---
@@ -62,9 +79,91 @@ Sostenimiento y cadena de suministro militar.
 
 ---
 
-## 🏗️ Arquitectura del Sistema v3.0
+## 📂 Ingesta Real de Datos (v5.0)
 
-### Flujo de Navegación
+### Modo de Operación
+
+El sistema ahora soporta **dos modos**:
+
+#### 🛠️ MODO SIMULACIÓN (Demo)
+- Datos generados automáticamente para demo
+- 70 partidas presupuestarias por capacidad
+- 25 reportes operativos simulados
+- Ideal para: Testing, capacitación, demos sin datos sensibles
+
+#### 📂 MODO INGESTA DE DATOS (Real)
+- Carga archivos Excel (eSIGEF) con partidas presupuestarias
+- Carga PDFs múltiples con reportes operativos
+- Normalización automática de columnas
+- Clasificación inteligente por capacidad y DOTMLPF
+
+### Función de Desambiguación Inteligente
+
+```python
+clasificar_partida_inteligente(codigo, descripcion, unidad) → (capacidad, tag_dotmlpf)
+```
+
+**Reglas de negocio:**
+
+1. **Clasificación de Capacidad** (C2, MANIOBRA, etc.):
+   - Scoring por keywords en descripción
+   - Desempate por unidad beneficiaria
+   - Fallback a default si no hay match
+
+2. **Clasificación DOTMLPF** (D, O, T, M, L, P, F):
+   - Mapeo por código presupuestario eSIGEF
+   - Refinamiento por keywords si código es genérico
+   - Ejemplo: '710401' → 'M' (Material)
+
+**Ejemplos:**
+
+| Código | Descripción | Unidad | → Capacidad | Tag |
+|--------|-------------|--------|-------------|-----|
+| 710101 | Servidor C2 principal | COA | C2 | M |
+| 510201 | Sueldos pilotos | Ala 21 | MANIOBRA | P |
+| 530510 | Horas vuelo | ESMA | MANIOBRA | T |
+| 750201 | Mantenimiento pista | Ala 23 | MANIOBRA | F |
+
+### Normalización de Columnas Excel
+
+El sistema reconoce múltiples variantes de nombres:
+
+- **Código**: Código / Codigo / Cod_Presupuestario / CodPresup / Partida
+- **Descripción**: Descripción / Descripcion / Detalle / Desc / Concepto
+- **Asignado**: Asignado / Monto_Asignado / Presupuesto / Codificado
+- **Ejecutado**: Ejecutado / Monto_Ejecutado / Devengado / Ejecucion
+- **Unidad**: Unidad / Unidad_Beneficiaria / Beneficiario / Dependencia
+
+### Procesamiento de PDFs
+
+- Extracción de texto con `pdfplumber`
+- Detección automática de unidad en el texto
+- Integración con motor NLP para análisis de riesgo
+- Soporte para múltiples PDFs simultáneos
+
+### Conector de Base de Datos (Placeholder)
+
+Preparado para conexión directa a sistemas institucionales:
+
+```python
+# Configuración futura
+DB_HOST = 'postgresql://esigef.institucional.ec'
+DB_PORT = 5432
+DB_NAME = 'esigef_produccion'
+```
+
+**Requiere:**
+- Variables de entorno para credenciales
+- Usuario read-only
+- Conexión SSL/TLS
+- IP whitelisting
+- Auditoría de accesos
+
+---
+
+## 🏗️ Arquitectura del Sistema v5.0
+
+### Flujo de Navegación v5.0
 
 ```
 1. Landing Page → Selección de Capacidad
@@ -73,45 +172,76 @@ Sostenimiento y cadena de suministro militar.
                   ├─ [🛡️ CIBERDEFENSA]     → (En desarrollo)
                   └─ [📦 LOGÍSTICA]        → (En desarrollo)
 
-2. Dashboard → 3 TABS + Sidebar
-   ├─ TAB 1: Situational Awareness (Heatmap + Radar)
-   ├─ TAB 2: Gobernanza & Calidad del Gasto
-   ├─ TAB 3: Data Intelligence (NLP)
-   └─ Sidebar: [⬅️ VOLVER AL INICIO] + Métricas + Filtros
+2. Dashboard → Sidebar con Selector de Modo (v5.0)
+   │
+   ├─ 🛠️ MODO SIMULACIÓN (Demo)
+   │   └─ Datos generados automáticamente
+   │
+   ├─ 📂 MODO INGESTA DE DATOS (Real)
+   │   ├─ Uploader Excel (eSIGEF)
+   │   ├─ Uploader PDFs (Reportes múltiples)
+   │   └─ Info Conector BD
+   │
+   ├─ ⚙️ Configuración Pesos DOTMLPF (v4.0)
+   │   └─ Sliders con validación suma 100%
+   │
+   └─ 📊 Métricas Ejecutivas
+
+3. Dashboard → 3 TABS
+   ├─ TAB 1: Situational Awareness (Heatmap Ponderado + Radar)
+   ├─ TAB 2: Gobernanza & Calidad del Gasto (Matriz Eficiencia)
+   └─ TAB 3: Data Intelligence (NLP + Risk Analysis)
 ```
 
-### Módulos Principales
+### Módulos Principales v5.0
 
-1. **Generación de Datos Estructurados (SQL Simulado)**
-   - 80 registros presupuestarios por capacidad
+1. **Módulo de Ingesta Real de Datos (v5.0 - NUEVO)**
+   - Función `clasificar_partida_inteligente()`: Desambiguación con reglas de negocio
+   - Función `procesar_excel_esigef()`: Normalización automática de columnas
+   - Función `extraer_texto_pdf()`: Procesamiento con pdfplumber
+   - Función `procesar_pdfs_reportes()`: Batch processing de múltiples PDFs
+   - Placeholder `conectar_base_institucional()`: Conector BD PostgreSQL/Oracle
+
+2. **Módulo de Scoring Ponderado Estratégico (v4.0)**
+   - Función `calculate_weighted_dotmlpf_scores()`: Cálculo con pesos configurables
+   - Controles interactivos en sidebar con validación
+   - Fórmula: Alistamiento = 70% weighted + 30% NLP
+   - Visualizaciones con valores ponderados (Heatmap + Radar)
+
+3. **Generación de Datos Estructurados (Modo Simulación)**
+   - 70 registros presupuestarios por capacidad
    - Datos específicos C2: Software, Radios, Bunkers, Servidores
    - Datos específicos Maniobra: Pilotos, Horas Vuelo, Repuestos, PDM, Hangares
    - Códigos presupuestarios clasificados por DOTMLPF
+   - Orden de Batalla Real FAE (15 unidades)
 
-2. **Generación de Datos No Estructurados (NLP Simulado)**
-   - 50 reportes operativos de texto libre
+4. **Generación de Datos No Estructurados (Modo Simulación)**
+   - 25 reportes operativos por capacidad
    - Simulación de PDFs de novedades militares
    - Análisis de sentimiento y riesgo operacional
 
-3. **Motor NLP de Análisis de Riesgo**
+5. **Motor NLP de Análisis de Riesgo**
    - Clasificación automática de sentimiento (critical, warning, positive)
    - Cálculo de Risk Score (0-100)
    - Índice de Alistamiento Operativo
+   - Integración con PDFs reales (v5.0)
 
-4. **Clasificador Multidimensional DOTMLPF x C2**
-   - Eje C2: Estratégico, Operacional, Táctico, Guerra Electrónica
+6. **Clasificador Multidimensional DOTMLPF x Capacidad**
+   - Eje Capacidades: C2, MANIOBRA, CIBERDEFENSA, LOGISTICA
+   - Niveles operacionales por capacidad
    - Eje DOTMLPF: Doctrine, Organization, Training, Material, Leadership, Personnel, Facilities
    - Clasificación automática mediante keywords y códigos presupuestarios
 
-5. **Algoritmo de Calidad del Gasto**
+7. **Algoritmo de Calidad del Gasto**
    - KPI 1: % Ejecución Presupuestaria
-   - KPI 2: Índice de Alistamiento Operativo
+   - KPI 2: Índice de Alistamiento Operativo (ponderado)
    - Matriz de Eficiencia (4 cuadrantes)
+   - Integración con pesos DOTMLPF estratégicos
 
-6. **Dashboard Interactivo Streamlit**
-   - TAB 1: Situational Awareness (Heatmap DOTMLPF, Radar Chart)
-   - TAB 2: Gobernanza & Calidad del Gasto (Scatter Matrix)
-   - TAB 3: Data Intelligence (NLP Analytics)
+8. **Dashboard Interactivo Streamlit**
+   - TAB 1: Situational Awareness (Heatmap DOTMLPF Ponderado, Radar Chart)
+   - TAB 2: Gobernanza & Calidad del Gasto (Scatter Matrix Eficiencia)
+   - TAB 3: Data Intelligence (NLP Analytics + Risk Assessment)
 
 ---
 
@@ -319,7 +449,9 @@ Para consultas sobre el sistema SIEC-C2, contactar al equipo de Defense Analytic
 
 ---
 
-**Última actualización**: 2026-01-13
-**Versión**: 3.0 (Multi-Capability Architecture)
-**Status**: POC Funcional Multicapacidad
-**Nuevas Capacidades**: Maniobra Aérea ✈️ | Navegación Modular 🎯 | Landing Page 🚀
+**Última actualización**: 2026-01-18
+**Versión**: 5.0 (Real Data Ingestion + Intelligent Classification)
+**Status**: POC Funcional con Ingesta Real de Datos
+**Nuevas Capacidades v5.0**: 📂 Excel ETL | 📄 PDF Processing | 🧠 Desambiguación Inteligente | 💾 DB Connector Ready
+**Capacidades v4.0**: ⚖️ Scoring Ponderado | 🏛️ OOB Real FAE (15 unidades)
+**Capacidades v3.0**: ✈️ Maniobra Aérea | 🎯 C2 | 🚀 Arquitectura Modular

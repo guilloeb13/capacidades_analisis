@@ -1,12 +1,22 @@
 """
-SIEC v4.0: Sistema Integrado de Evaluación de Capacidades
+SIEC v5.0: Sistema Integrado de Evaluación de Capacidades
 ==========================================================
-Arquitectura Modular Multicapacidad + Scoring Ponderado Estratégico
+Ingesta Real de Datos + Desambiguación Inteligente
 
 Autor: Lead Data Scientist - OTAN Defense Analytics
-Arquitectura: Lakehouse Híbrido + Weighted Scoring Algorithm
-Framework: Streamlit + Pandas + Plotly
-Versión: 4.0 (Weighted Strategic Scoring + Real OOB)
+Arquitectura: Lakehouse Híbrido + ETL + Weighted Scoring Algorithm
+Framework: Streamlit + Pandas + Plotly + PDFPlumber
+Versión: 5.0 (Real Data Ingestion + Intelligent Classification)
+
+CHANGELOG v5.0:
+- Selector de modo: Simulación vs Ingesta Real
+- Función de desambiguación inteligente (clasificar_partida_inteligente)
+- File uploader para Excel (eSIGEF presupuestos)
+- File uploader para PDFs (reportes operativos)
+- Procesamiento de Excel con normalización de columnas
+- Extracción de texto de PDFs con pdfplumber
+- Placeholder de conector a base de datos institucional
+- Reglas de negocio para clasificación por capacidad + unidad
 
 CHANGELOG v4.0:
 - Orden de Batalla real FAE (15 unidades)
@@ -25,6 +35,22 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import random
 from typing import Tuple, Dict, List
+from io import BytesIO
+
+# Importaciones para ingesta de datos v5.0
+try:
+    import pdfplumber
+    PDFPLUMBER_AVAILABLE = True
+except ImportError:
+    PDFPLUMBER_AVAILABLE = False
+    st.warning("⚠️ pdfplumber no disponible. Instale con: pip install pdfplumber")
+
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+    st.warning("⚠️ openpyxl no disponible. Instale con: pip install openpyxl")
 
 # ============================================================================
 # CONFIGURACIÓN GLOBAL Y CONSTANTES MILITARES
@@ -478,6 +504,325 @@ def classify_operational_level(description: str, capability: str) -> str:
 
 
 # ============================================================================
+# MÓDULO 3.5: INGESTA REAL DE DATOS (v5.0)
+# ============================================================================
+
+def clasificar_partida_inteligente(codigo: str, descripcion: str, unidad: str) -> Tuple[str, str]:
+    """
+    FUNCIÓN DE DESAMBIGUACIÓN INTELIGENTE (v5.0)
+
+    Clasifica una partida presupuestaria en:
+    1. Capacidad estratégica (C2, MANIOBRA, CIBERDEFENSA, LOGISTICA)
+    2. Tag DOTMLPF (D, O, T, M, L, P, F)
+
+    Reglas de negocio:
+    - Primero intenta clasificar por keywords en descripción
+    - Si hay ambigüedad, desempata por unidad beneficiaria
+    - Si sigue ambiguo, usa código presupuestario como fallback
+
+    Args:
+        codigo: Código presupuestario eSIGEF (ej: '710101')
+        descripcion: Descripción de la partida
+        unidad: Unidad beneficiaria
+
+    Returns:
+        Tuple (capacidad, tag_dotmlpf)
+    """
+
+    desc_lower = descripcion.lower()
+    unidad_lower = unidad.lower()
+
+    # PASO 1: Clasificación de CAPACIDAD por keywords con scoring
+    capability_scores = {cap: 0 for cap in CAPABILITY_KEYWORDS.keys()}
+
+    for cap, keywords in CAPABILITY_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword in desc_lower:
+                capability_scores[cap] += 1
+
+    # PASO 2: Desempate por unidad beneficiaria
+    # Unidades de C2
+    c2_units = ['coa', 'cos-1', 'cos-2', 'cociber', 'inteligencia', 'spoc', 'comando']
+    # Unidades de MANIOBRA
+    maniobra_units = ['ala de combate', 'ala de transporte', 'grupo aéreo', 'esma', 'escuadrón']
+
+    if capability_scores['C2'] == capability_scores['MANIOBRA'] == 0:
+        # No hay keywords, decidir por unidad
+        if any(unit_key in unidad_lower for unit_key in c2_units):
+            capability_scores['C2'] = 10
+        elif any(unit_key in unidad_lower for unit_key in maniobra_units):
+            capability_scores['MANIOBRA'] = 10
+
+    elif capability_scores['C2'] == capability_scores['MANIOBRA'] and capability_scores['C2'] > 0:
+        # Empate con keywords, usar unidad como desempate
+        if any(unit_key in unidad_lower for unit_key in maniobra_units):
+            capability_scores['MANIOBRA'] += 5
+        elif any(unit_key in unidad_lower for unit_key in c2_units):
+            capability_scores['C2'] += 5
+
+    # Determinar capacidad ganadora
+    max_score = max(capability_scores.values())
+    if max_score == 0:
+        capacidad = 'C2'  # Default
+    else:
+        capacidad = max(capability_scores, key=capability_scores.get)
+
+    # PASO 3: Clasificación de DOTMLPF por código presupuestario
+    codigo_prefix = codigo[:2] if len(codigo) >= 2 else ''
+    tag_dotmlpf = BUDGET_CODE_MAPPING.get(codigo_prefix, 'O')  # Default: Organization
+
+    # Refinamiento por keywords si es necesario
+    if tag_dotmlpf == 'O':  # Si el código no fue específico, usar keywords
+        if any(word in desc_lower for word in ['capacitación', 'curso', 'entrenamiento', 'simulador']):
+            tag_dotmlpf = 'T'
+        elif any(word in desc_lower for word in ['repuesto', 'aeronave', 'munición', 'equipo', 'material']):
+            tag_dotmlpf = 'M'
+        elif any(word in desc_lower for word in ['personal', 'sueldo', 'bonificación', 'tripulación']):
+            tag_dotmlpf = 'P'
+        elif any(word in desc_lower for word in ['infraestructura', 'construcción', 'pista', 'hangar']):
+            tag_dotmlpf = 'F'
+        elif any(word in desc_lower for word in ['doctrina', 'estudio', 'investigación']):
+            tag_dotmlpf = 'D'
+
+    return capacidad, tag_dotmlpf
+
+
+def procesar_excel_esigef(uploaded_file) -> pd.DataFrame:
+    """
+    Procesa archivo Excel de eSIGEF con normalización de columnas.
+
+    Normaliza nombres de columnas que pueden variar:
+    - 'Código' / 'Codigo' / 'Cod_Presupuestario' → 'Codigo_Presupuestario'
+    - 'Descripción' / 'Descripcion' / 'Detalle' → 'Descripcion'
+    - 'Asignado' / 'Monto_Asignado' / 'Presupuesto' → 'Monto_Asignado'
+    - 'Ejecutado' / 'Monto_Ejecutado' / 'Devengado' → 'Monto_Ejecutado'
+    - 'Unidad' / 'Unidad_Beneficiaria' / 'Beneficiario' → 'Unidad_Beneficiaria'
+
+    Args:
+        uploaded_file: Archivo Excel cargado por st.file_uploader
+
+    Returns:
+        DataFrame normalizado con columnas estándar
+    """
+
+    if not OPENPYXL_AVAILABLE:
+        st.error("❌ openpyxl no está instalado. No se pueden procesar archivos Excel.")
+        return pd.DataFrame()
+
+    try:
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
+
+        # Mapeo de columnas posibles
+        column_mapping = {
+            'Codigo_Presupuestario': ['Código', 'Codigo', 'Cod_Presupuestario', 'CodPresup', 'Partida'],
+            'Descripcion': ['Descripción', 'Descripcion', 'Detalle', 'Desc', 'Concepto'],
+            'Monto_Asignado': ['Asignado', 'Monto_Asignado', 'Presupuesto', 'Asignacion', 'Codificado'],
+            'Monto_Ejecutado': ['Ejecutado', 'Monto_Ejecutado', 'Devengado', 'Ejecucion'],
+            'Unidad_Beneficiaria': ['Unidad', 'Unidad_Beneficiaria', 'Beneficiario', 'Dependencia']
+        }
+
+        # Normalizar nombres
+        normalized_df = pd.DataFrame()
+
+        for target_col, possible_names in column_mapping.items():
+            for possible_name in possible_names:
+                if possible_name in df.columns:
+                    normalized_df[target_col] = df[possible_name]
+                    break
+
+        # Validar que se encontraron las columnas críticas
+        required_cols = ['Codigo_Presupuestario', 'Descripcion', 'Monto_Asignado', 'Unidad_Beneficiaria']
+        missing_cols = [col for col in required_cols if col not in normalized_df.columns]
+
+        if missing_cols:
+            st.error(f"❌ Columnas requeridas no encontradas en Excel: {', '.join(missing_cols)}")
+            st.info("💡 Columnas encontradas en el archivo: " + ", ".join(df.columns))
+            return pd.DataFrame()
+
+        # Crear columna Monto_Ejecutado si no existe
+        if 'Monto_Ejecutado' not in normalized_df.columns:
+            normalized_df['Monto_Ejecutado'] = normalized_df['Monto_Asignado'] * 0.75  # Estimado 75%
+
+        # Aplicar clasificación inteligente a cada fila
+        clasificaciones = normalized_df.apply(
+            lambda row: clasificar_partida_inteligente(
+                str(row['Codigo_Presupuestario']),
+                str(row['Descripcion']),
+                str(row['Unidad_Beneficiaria'])
+            ),
+            axis=1
+        )
+
+        normalized_df['Capacidad'] = clasificaciones.apply(lambda x: x[0])
+        normalized_df['DOTMLPF_Tag'] = clasificaciones.apply(lambda x: x[1])
+
+        # Agregar campos adicionales
+        normalized_df['Fecha'] = datetime.now()
+        normalized_df['Tipo_Recurso'] = normalized_df['Codigo_Presupuestario'].apply(
+            lambda x: 'Inversión' if str(x).startswith(('71', '84', '75')) else 'Gasto'
+        )
+        normalized_df['ID_Partida'] = [f"EXT-{i+1:04d}" for i in range(len(normalized_df))]
+
+        return normalized_df
+
+    except Exception as e:
+        st.error(f"❌ Error al procesar Excel: {str(e)}")
+        return pd.DataFrame()
+
+
+def extraer_texto_pdf(uploaded_file) -> str:
+    """
+    Extrae texto de un PDF usando pdfplumber.
+
+    Args:
+        uploaded_file: Archivo PDF cargado por st.file_uploader
+
+    Returns:
+        String con el texto extraído
+    """
+
+    if not PDFPLUMBER_AVAILABLE:
+        st.error("❌ pdfplumber no está instalado. No se pueden procesar PDFs.")
+        return ""
+
+    try:
+        with pdfplumber.open(uploaded_file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        st.error(f"❌ Error al extraer texto de PDF: {str(e)}")
+        return ""
+
+
+def procesar_pdfs_reportes(uploaded_files, capability: str) -> pd.DataFrame:
+    """
+    Procesa múltiples PDFs de reportes operativos.
+
+    Args:
+        uploaded_files: Lista de archivos PDF
+        capability: Capacidad estratégica seleccionada
+
+    Returns:
+        DataFrame con reportes procesados
+    """
+
+    if not uploaded_files:
+        return pd.DataFrame()
+
+    reports = []
+
+    for idx, pdf_file in enumerate(uploaded_files):
+        texto = extraer_texto_pdf(pdf_file)
+
+        if texto:
+            # Determinar unidad del texto
+            unidad = "Unidad No Especificada"
+            for unit in MILITARY_UNITS:
+                if unit.lower() in texto.lower():
+                    unidad = unit
+                    break
+
+            reports.append({
+                'Report_ID': f'PDF-{idx+1:03d}',
+                'Fuente': pdf_file.name,
+                'Unidad_Origen': unidad,
+                'Texto_Reporte': texto[:1000],  # Primeros 1000 caracteres
+                'Fecha_Reporte': datetime.now(),
+                'Capacidad': capability
+            })
+
+    if reports:
+        return pd.DataFrame(reports)
+    else:
+        return pd.DataFrame()
+
+
+def conectar_base_institucional():
+    """
+    PLACEHOLDER: Conector a base de datos institucional.
+
+    En producción, esta función se conectaría a la base de datos
+    del sistema eSIGEF institucional usando SQLAlchemy.
+
+    Ejemplo de implementación:
+
+    ```python
+    from sqlalchemy import create_engine
+    import os
+
+    # Configuración desde variables de entorno
+    db_host = os.getenv('SIEC_DB_HOST', 'localhost')
+    db_port = os.getenv('SIEC_DB_PORT', '5432')
+    db_name = os.getenv('SIEC_DB_NAME', 'esigef')
+    db_user = os.getenv('SIEC_DB_USER', 'readonly_user')
+    db_pass = os.getenv('SIEC_DB_PASSWORD', '')
+
+    # Crear conexión
+    engine = create_engine(
+        f'postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}'
+    )
+
+    # Consulta SQL
+    query = '''
+        SELECT
+            codigo_presupuestario,
+            descripcion,
+            monto_asignado,
+            monto_ejecutado,
+            unidad_beneficiaria,
+            fecha_registro
+        FROM partidas_presupuestarias
+        WHERE ano_fiscal = 2024
+            AND estado = 'ACTIVO'
+    '''
+
+    # Leer datos
+    df = pd.read_sql(query, engine)
+
+    # Aplicar clasificación inteligente
+    clasificaciones = df.apply(
+        lambda row: clasificar_partida_inteligente(
+            row['codigo_presupuestario'],
+            row['descripcion'],
+            row['unidad_beneficiaria']
+        ),
+        axis=1
+    )
+
+    df['Capacidad'] = clasificaciones.apply(lambda x: x[0])
+    df['DOTMLPF_Tag'] = clasificaciones.apply(lambda x: x[1])
+
+    return df
+    ```
+
+    Configuración de seguridad:
+    - Usar credenciales read-only
+    - Conexión SSL/TLS obligatoria
+    - IP whitelisting
+    - Auditoría de accesos
+    """
+
+    st.info("""
+        💡 **CONECTOR DE BASE DE DATOS (Placeholder)**
+
+        Esta función está preparada para conectarse a:
+        - PostgreSQL (eSIGEF institucional)
+        - Oracle (Sistemas legacy)
+        - SQL Server (Integración interagencias)
+
+        Requiere configuración de:
+        - Variables de entorno (DB_HOST, DB_USER, DB_PASSWORD)
+        - Credenciales read-only
+        - Certificados SSL/TLS
+        - Whitelisting de IPs
+    """)
+
+    return None
+
+
+# ============================================================================
 # MÓDULO 4: MOTOR NLP
 # ============================================================================
 
@@ -714,26 +1059,72 @@ def create_dotmlpf_matrix(df_budget: pd.DataFrame, weights: Dict[str, float]) ->
 
 
 # ============================================================================
-# MÓDULO 7: PROCESAMIENTO PRINCIPAL (ETL + ENRIQUECIMIENTO)
+# MÓDULO 7: PROCESAMIENTO PRINCIPAL (ETL + ENRIQUECIMIENTO) - v5.0
 # ============================================================================
 
-@st.cache_data
-def load_and_process_data(capability: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Pipeline principal con orden de batalla real FAE."""
+def load_and_process_data(
+    capability: str,
+    mode: str = 'simulation',
+    uploaded_excel=None,
+    uploaded_pdfs=None
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Pipeline principal con soporte para Simulación e Ingesta Real (v5.0).
 
-    df_budget = generate_structured_data(capability)
-    df_reports = generate_unstructured_data(capability)
+    Args:
+        capability: Capacidad estratégica seleccionada
+        mode: 'simulation' o 'ingestion'
+        uploaded_excel: Archivo Excel cargado (modo ingestion)
+        uploaded_pdfs: Lista de PDFs cargados (modo ingestion)
 
-    df_budget['Operational_Level'] = df_budget.apply(
-        lambda row: classify_operational_level(row['Descripcion'], row['Capacidad']),
-        axis=1
-    )
+    Returns:
+        Tuple (df_budget, df_reports)
+    """
 
-    nlp_results = df_reports['Texto_Reporte'].apply(analyze_sentiment_readiness)
-    df_reports['risk_score'] = nlp_results.apply(lambda x: x['risk_score'])
-    df_reports['sentiment'] = nlp_results.apply(lambda x: x['sentiment'])
-    df_reports['issues_detected'] = nlp_results.apply(lambda x: x['issues_detected'])
-    df_reports['readiness_index'] = nlp_results.apply(lambda x: x['readiness_index'])
+    if mode == 'simulation':
+        # MODO SIMULACIÓN (v4.0 backward compatible)
+        df_budget = generate_structured_data(capability)
+        df_reports = generate_unstructured_data(capability)
+
+    else:
+        # MODO INGESTA REAL (v5.0)
+        if uploaded_excel is not None:
+            df_budget = procesar_excel_esigef(uploaded_excel)
+
+            # Filtrar por capacidad seleccionada
+            if not df_budget.empty:
+                df_budget = df_budget[df_budget['Capacidad'] == capability].copy()
+
+            if df_budget.empty:
+                st.warning(f"⚠️ No se encontraron partidas para la capacidad {capability} en el archivo Excel.")
+                df_budget = generate_structured_data(capability)  # Fallback a simulación
+        else:
+            st.warning("⚠️ No se cargó archivo Excel. Usando datos simulados.")
+            df_budget = generate_structured_data(capability)
+
+        if uploaded_pdfs is not None and len(uploaded_pdfs) > 0:
+            df_reports = procesar_pdfs_reportes(uploaded_pdfs, capability)
+
+            if df_reports.empty:
+                st.warning("⚠️ No se pudieron procesar los PDFs. Usando reportes simulados.")
+                df_reports = generate_unstructured_data(capability)
+        else:
+            st.info("💡 No se cargaron PDFs. Usando reportes simulados.")
+            df_reports = generate_unstructured_data(capability)
+
+    # Enriquecimiento común para ambos modos
+    if not df_budget.empty:
+        df_budget['Operational_Level'] = df_budget.apply(
+            lambda row: classify_operational_level(row['Descripcion'], row['Capacidad']),
+            axis=1
+        )
+
+    if not df_reports.empty:
+        nlp_results = df_reports['Texto_Reporte'].apply(analyze_sentiment_readiness)
+        df_reports['risk_score'] = nlp_results.apply(lambda x: x['risk_score'])
+        df_reports['sentiment'] = nlp_results.apply(lambda x: x['sentiment'])
+        df_reports['issues_detected'] = nlp_results.apply(lambda x: x['issues_detected'])
+        df_reports['readiness_index'] = nlp_results.apply(lambda x: x['readiness_index'])
 
     return df_budget, df_reports
 
@@ -938,9 +1329,9 @@ def render_landing_page():
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
         <div style='text-align: center; color: #666; font-size: 11px; padding: 20px; border-top: 1px solid #333;'>
-            <b>SIEC Defense Analytics Platform v4.0</b> | Weighted Strategic Scoring<br>
-            Real OOB FAE (15 Units) | Powered by Streamlit + Pandas + Plotly | NATO UNCLASSIFIED<br>
-            <i>Sistema de Evaluación Estratégica de Capacidades Militares con Scoring Ponderado</i>
+            <b>SIEC Defense Analytics Platform v5.0</b> | Real Data Ingestion + Intelligent Classification<br>
+            Real OOB FAE (15 Units) | Excel ETL + PDF Processing | NATO UNCLASSIFIED<br>
+            <i>Sistema de Evaluación Estratégica con Ingesta Real de Datos Institucionales</i>
         </div>
     """, unsafe_allow_html=True)
 
@@ -955,7 +1346,7 @@ def render_dashboard(capability: str):
     cap_info = STRATEGIC_CAPABILITIES[capability]
 
     st.set_page_config(
-        page_title=f"SIEC v4.0 | {cap_info['name']}",
+        page_title=f"SIEC v5.0 | {cap_info['name']}",
         page_icon=cap_info['icon'],
         layout="wide",
         initial_sidebar_state="expanded"
@@ -977,21 +1368,70 @@ def render_dashboard(capability: str):
                 {cap_info['description']}
             </p>
             <p style='color: #FFD700; font-size: 11px; margin: 5px 0;'>
-                SIEC v4.0 | Weighted DOTMLPF Analysis | OOB FAE Real
+                SIEC v5.0 | Real Data Ingestion + Weighted DOTMLPF Analysis | OOB FAE Real
             </p>
         </div>
     """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Cargar datos
-    with st.spinner(f'🔄 Procesando datos de {cap_info["name"]}...'):
-        df_budget, df_reports = load_and_process_data(capability)
-
-    # Sidebar con controles de pesos
+    # Sidebar con controles de modo y pesos (v5.0)
     with st.sidebar:
         st.markdown(f"## {cap_info['icon']} {cap_info['name']}")
         st.markdown("---")
+
+        # SELECTOR DE MODO (v5.0)
+        st.markdown("### 🔧 MODO DE OPERACIÓN")
+        mode = st.radio(
+            "Seleccione modo de datos:",
+            options=['🛠️ MODO SIMULACIÓN (Demo)', '📂 MODO INGESTA DE DATOS (Real)'],
+            index=0,
+            key='mode_selector',
+            help="Simulación: datos generados automáticamente. Ingesta: cargar archivos Excel y PDF."
+        )
+
+        mode_value = 'simulation' if '🛠️' in mode else 'ingestion'
+
+        st.markdown("---")
+
+        # FILE UPLOADERS (v5.0) - Solo en modo ingesta
+        uploaded_excel = None
+        uploaded_pdfs = None
+
+        if mode_value == 'ingestion':
+            st.markdown("### 📂 CARGA DE ARCHIVOS")
+
+            st.markdown("**1. Presupuesto (Excel eSIGEF)**")
+            uploaded_excel = st.file_uploader(
+                "Archivo Excel con partidas presupuestarias",
+                type=['xlsx', 'xls'],
+                key='excel_uploader',
+                help="Columnas esperadas: Código, Descripción, Asignado, Ejecutado, Unidad"
+            )
+
+            if uploaded_excel:
+                st.success(f"✅ {uploaded_excel.name}")
+
+            st.markdown("**2. Reportes (PDFs Operativos)**")
+            uploaded_pdfs = st.file_uploader(
+                "Reportes operativos en PDF (múltiples)",
+                type=['pdf'],
+                accept_multiple_files=True,
+                key='pdf_uploader',
+                help="Pueden ser novedades, informes de mantenimiento, reportes de novedades, etc."
+            )
+
+            if uploaded_pdfs:
+                st.success(f"✅ {len(uploaded_pdfs)} archivo(s) cargado(s)")
+                for pdf in uploaded_pdfs:
+                    st.text(f"  • {pdf.name}")
+
+            # Información del conector DB (placeholder)
+            with st.expander("💾 CONECTOR BD (Configuración Avanzada)"):
+                if st.button("ℹ️ Ver Info Conector BD", key="db_info"):
+                    conectar_base_institucional()
+
+            st.markdown("---")
 
         if st.button("⬅️ VOLVER AL INICIO", use_container_width=True):
             st.session_state.page = 'landing'
@@ -999,6 +1439,18 @@ def render_dashboard(capability: str):
             st.rerun()
 
         st.markdown("---")
+
+    # Cargar datos según modo seleccionado (v5.0)
+    with st.spinner(f'🔄 Procesando datos de {cap_info["name"]} ({mode_value.upper()})...'):
+        df_budget, df_reports = load_and_process_data(
+            capability,
+            mode=mode_value,
+            uploaded_excel=uploaded_excel,
+            uploaded_pdfs=uploaded_pdfs
+        )
+
+    # Continuar con sidebar - controles de pesos
+    with st.sidebar:
 
         # CONTROLES DE PESOS ESTRATÉGICOS (v4.0)
         with st.expander("⚙️ CONFIGURACIÓN ESTRATÉGICA (PESOS DOTMLPF)", expanded=False):
